@@ -264,8 +264,15 @@ async def restore_cookie_session(token: str) -> Session | None:
         if session is None:
             await delete_saved_session(token)
             return None
-        # Nie pokazujemy danych profilu, dopóki Librus nie potwierdzi sesji.
+        # Przed odczytem profilu próbujemy bezhasłowego refreshToken.
+        # Jeśli się nie uda, nie wysyłamy pustego hasła do Librusa.
         try:
+            low_client = getattr(session.active.librus, "client", None)
+            refresh = getattr(low_client, "async_refresh_session", None)
+            if callable(refresh) and not await refresh():
+                await close_session_clients(session)
+                await delete_saved_session(token)
+                return None
             await session.active.librus.me()
         except Exception as exc:
             await close_session_clients(session)
@@ -371,6 +378,7 @@ async def session_info(request: Request):
             return {"authenticated": False}
         raise
     # Biblioteka sama odświeża ciasteczko oauth_token, gdy jest to potrzebne.
+    expired_at_provider = False
     async with session.lock:
         login = getattr(session.active.librus, "login", None) if session.mode == "live" else None
         if callable(login):
@@ -379,9 +387,16 @@ async def session_info(request: Request):
             except Exception as exc:
                 from librus_synergia.exceptions import LibrusAuthError
                 if isinstance(exc, LibrusAuthError):
-                    return {"authenticated": False}
-                LOG.warning("Błąd odnawiania sesji przy otwarciu: %s", type(exc).__name__)
-                # Nie niszczymy ważnego widoku przy chwilowej awarii połączenia.
+                    expired_at_provider = True
+                else:
+                    LOG.warning("Błąd odnawiania sesji przy otwarciu: %s", type(exc).__name__)
+                    # Nie niszczymy ważnego widoku przy chwilowej awarii połączenia.
+    if expired_at_provider:
+        token = request.cookies.get("synergia_session", "")
+        SESSIONS.pop(token, None)
+        await close_session_clients(session)
+        await delete_saved_session(token)
+        return {"authenticated": False}
     return profile_payload(session)
 
 
