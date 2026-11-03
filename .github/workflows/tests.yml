@@ -24,5 +24,7 @@ jobs:
           python -m pip install -r requirements.txt pytest httpx
       - name: Check Python syntax
         run: python -m compileall -q app.py session_store.py tests
+      - name: Check frontend JavaScript syntax
+        run: node --check static/app.js
       - name: Unit and regression tests (mock accounts only)
         run: python -m pytest -q
