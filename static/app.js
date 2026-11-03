@@ -207,7 +207,7 @@ async function openMessage(i) {
   try {
     const data=await request('/api/message/'+encodeURIComponent(msg.id)+'?mailbox='+encodeURIComponent(state.mailbox));
     if(epoch!==state.messageEpoch)return;
-    $('dialog-body').innerHTML=`<h2 id="dialog-title">${esc(data.subject||'Bez tematu')}</h2><small>Od: ${esc(data.sender||'—')} · ${dateLabel(data.date)}</small><div class="body-content"><p>${esc(data.body||'Brak treści.')}</p></div>${data.attachments?.length?`<small>Załączniki: ${data.attachments.map(esc).join(', ')} (pobieranie w kolejnej wersji)</small>`:''}`;
+    $('dialog-body').innerHTML=`<h2 id="dialog-title">${esc(data.subject||'Bez tematu')}</h2><small class="message-modal-meta">Od: ${esc(data.sender||'—')} · ${dateLabel(data.date)}</small><div class="body-content"><p class="message-body-text">${esc(data.body||'Brak treści.')}</p></div>${data.attachments?.length?`<small class="message-modal-attachments">Załączniki: ${data.attachments.map(esc).join(', ')} (pobieranie w kolejnej wersji)</small>`:''}`;
   } catch(e) { if(epoch===state.messageEpoch) $('dialog-body').innerHTML=`<div class="error-box">${esc(errDetail(e))}</div>`; }
 }
 function closeDialog() { $('message-dialog').classList.add('hidden'); }

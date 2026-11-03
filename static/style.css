@@ -143,3 +143,79 @@ html[data-theme="dark"] .toast{background:#314965;color:#fff}
   html[data-theme="dark"] .lesson-card.substitution{border-left-color:#ffbc70}
   .week-controls{width:100%;justify-content:space-between}.week-title{min-width:0;flex:1}.content-head .week-controls{margin-top:1px}
 }
+
+/*
+ * Czytelność v4.2: spójne kolory tekstu w obu motywach.
+ * Zostawiamy kompozycję, siatkę, odstępy i kolory akcentów;
+ * poprawiamy wyłącznie kontrast i hierarchię tekstu.
+ */
+html[data-theme="dark"] {
+  --ink:#edf4ff;
+  --soft-text:#c7d4e8;
+  --muted:#bfcee3;
+  --blue:#86d3ff;
+  --blue2:#75cdfb;
+  --line:#425670;
+}
+/* Treści z wiadomości są zwykłym tekstem, więc nadpisujemy jasnomotywowe
+   .dialog p { color:#50617b } i .dialog small { color:#98a5b8 }. */
+html[data-theme="dark"] .dialog,
+html[data-theme="dark"] #dialog-body {
+  color:var(--ink);
+}
+html[data-theme="dark"] :is(#dialog-body .body-content, #dialog-body .message-body-text, #dialog-body .body-content p, #dialog-body .body-content li, #dialog-body .body-content blockquote) {
+  color:var(--ink);
+  opacity:1;
+}
+html[data-theme="dark"] #dialog-body .body-content {
+  border-top-color:var(--line);
+}
+html[data-theme="dark"] :is(.dialog p, .dialog small, #dialog-body .message-modal-meta, #dialog-body .message-modal-attachments) {
+  color:var(--soft-text);
+  opacity:1;
+}
+html[data-theme="dark"] #dialog-body .message-body-text {
+  color:var(--ink);
+  line-height:1.72;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+/* Listy, zakładki, frekwencja, zadania i komunikaty. */
+html[data-theme="dark"] :is(.message-row p, .message-row time, .message-row h3, .content-head p, .event-main p, .task-card p, .task-card-footer, .lesson-detail, .lesson-meta, .lesson-note, .mini-body small, .stat-label, .stat-note, .grade-foot, .event-right, .metric span, .donut-inner span, .profile-hint, .profile-menu-title, .profile-dialog-info, .attendance-note, .timeline-copy>span, .timeline-arrow, .bottom-link:not(.active), .day-tab:not(.active), .week-title, .main-footer, .sidebar-tip small, .sidebar-section-label, .loading, .empty) {
+  color:var(--soft-text);
+}
+html[data-theme="dark"] :is(.lesson-subject, .mini-body strong, .message-row strong, .subject-card h3, .metric strong, .stat-value, .event-main h3, .task-card h3, .timeline-copy strong) {
+  color:var(--ink);
+}
+html[data-theme="dark"] :is(.tab:not(.active), .bottom-link:not(.active), .nav-link:not(.active), .logout-button, .breadcrumb, .week-arrow, .icon-button, .profile-trigger-name) {
+  color:var(--soft-text);
+}
+html[data-theme="dark"] .message-row.unread { background:#223750; }
+html[data-theme="dark"] .message-row.unread:hover { background:#2a4462; }
+html[data-theme="dark"] .lesson-card.canceled { opacity:.79; }
+html[data-theme="dark"] :is(.auth-form-pane input, .profile-dialog-box input, .controls select) {
+  color:var(--ink);
+}
+html[data-theme="dark"] :is(.auth-form-pane input, .profile-dialog-box input)::placeholder {
+  color:var(--soft-text);
+  opacity:1;
+}
+html[data-theme="dark"] :is(.auth-form-pane>p, .auth-disclaimer, .form-error, .auth-form-pane label) {
+  color:var(--soft-text);
+}
+html[data-theme="dark"] .form-error:not(:empty) { color:#ffbdc5; }
+/* Jasny motyw również miał kilka zbyt bladych dat i opisów. */
+html:not([data-theme="dark"]) :is(.dialog small, .message-row p, .message-row time, .content-head p, .stat-label, .stat-note, .mini-body small, .grade-foot, .lesson-detail, .lesson-meta, .event-main p, .task-card p, .task-card-footer, .event-right, .main-footer, .bottom-link:not(.active), .attendance-note, .empty) {
+  color:#566b85;
+}
+html:not([data-theme="dark"]) #dialog-body .message-body-text {
+  color:#273952;
+  opacity:1;
+  line-height:1.72;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+html:not([data-theme="dark"]) #dialog-body .message-modal-meta,
+html:not([data-theme="dark"]) #dialog-body .message-modal-attachments {
+  color:#536981;
+}
