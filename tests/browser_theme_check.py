@@ -71,7 +71,8 @@ with sync_playwright() as p:
         page.add_style_tag(content=(ROOT/"style.css").read_text())
         page.add_script_tag(content=(ROOT/"theme.js").read_text())
         page.evaluate(fake)
-        page.add_script_tag(content=(ROOT/"app.js").read_text())
+        # Test uruchamia HTML w about:blank, więc podsuwamy testową bazę URL.
+        page.add_script_tag(content=(ROOT/"app.js").read_text().replace('window.location.origin', '"https://testing.invalid"'))
         page.locator("#demo-btn").click()
         page.locator("#workspace:not(.hidden)").wait_for()
         page.evaluate("navigate('messages')")
