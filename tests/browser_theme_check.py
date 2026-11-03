@@ -41,7 +41,7 @@ def luminance(rgb):
     return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
 
 def color_rgb(value):
-    parts = [float(x) for x in re.findall(r"\\d+(?:\\.\\d+)?", value)]
+    parts = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", value)]
     assert len(parts) >= 3, value
     return parts[:3]
 
