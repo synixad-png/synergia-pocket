@@ -33,30 +33,31 @@ window.fetch = async (url,init={}) => {
 };
 """
 
-JS_CONTRAST = """(selector) => {
-  const el=document.querySelector(selector);
-  if(!el) throw Error('Missing '+selector);
-  const parse=(css)=> {
-    const m=css.match(/rgba?\\(([^)]*)\\)/);
-    if(!m) throw Error('Bad CSS color '+css);
-    return m[1].split(',').slice(0,3).map(v=>Number(v.trim()));
+import re
+
+def luminance(rgb):
+    channels = [v / 255 for v in rgb]
+    linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+def color_rgb(value):
+    parts = [float(x) for x in re.findall(r"\\d+(?:\\.\\d+)?", value)]
+    assert len(parts) >= 3, value
+    return parts[:3]
+
+def contrast_of(fg, bg):
+    a, b = luminance(color_rgb(fg)), luminance(color_rgb(bg))
+    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+
+JS_COLORS = """(selector) => {
+  const el = document.querySelector(selector);
+  if (!el) throw new Error('Missing '+selector);
+  const background = el.closest('.dialog,.message-row,.bottom-nav');
+  if (!background) throw new Error('No testable background for '+selector);
+  return {
+    fg: getComputedStyle(el).color,
+    bg: getComputedStyle(background).backgroundColor
   };
-  const luminance=(rgb)=>{
-    const linear=rgb.map(v=>{
-      const s=v/255;
-      return s<=0.04045?s/12.92:Math.pow((s+0.055)/1.055,2.4);
-    });
-    return linear[0]*0.2126+linear[1]*0.7152+linear[2]*0.0722;
-  };
-  let node=el,bg='rgb(255, 255, 255)';
-  while(node) {
-    const c=getComputedStyle(node).backgroundColor;
-    if(c && c!== 'transparent' && !c.endsWith(', 0)') {bg=c;break;}
-    node=node.parentElement;
-  }
-  const fg=getComputedStyle(el).color;
-  const l1=luminance(parse(fg)),l2=luminance(parse(bg));
-  return {fg,bg,ratio:(Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05)};
 }"""
 
 with sync_playwright() as p:
@@ -93,9 +94,10 @@ with sync_playwright() as p:
                 # Obliczamy rzeczywisty kolor CSS i najbliższe nieprzezroczyste tło.
                 if selector.startswith(".bottom-link") and width>620:
                     continue
-                value=page.evaluate(JS_CONTRAST,selector)
-                assert value["ratio"]>=minimum,(width,theme,selector,value)
-                print(f"PASS {width}px {theme} {selector}: {value['ratio']:.2f}:1")
+                value=page.evaluate(JS_COLORS,selector)
+                ratio=contrast_of(value["fg"],value["bg"])
+                assert ratio>=minimum,(width,theme,selector,value,ratio)
+                print(f"PASS {width}px {theme} {selector}: {ratio:.2f}:1")
         assert not errors,errors
         page.close()
     browser.close()
