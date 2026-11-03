@@ -11,11 +11,21 @@
   <link rel="apple-touch-icon" href="/static/icon-192.png">
   <title>Synergia Pocket — Twój szkolny dzień</title>
   <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+  <script src="/static/theme.js"></script>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <section id="auth" class="auth-screen">
+    <div class="auth-theme"><div class="theme-picker">
+            <button class="theme-trigger" type="button" data-theme-trigger aria-label="Motyw wyglądu" aria-expanded="false" title="Wybierz motyw">◐</button>
+            <div class="theme-menu hidden" role="group" aria-label="Motyw wyglądu">
+              <strong>Wygląd aplikacji</strong>
+              <button type="button" data-theme-choice="light">☀️ <span>Jasny</span><span class="theme-check">✓</span></button>
+              <button type="button" data-theme-choice="dark">☾ <span>Ciemny</span><span class="theme-check">✓</span></button>
+              <button type="button" data-theme-choice="system">◐ <span>Automatyczny</span><span class="theme-check">✓</span></button>
+            </div>
+          </div></div>
     <div class="auth-backdrop orb-one"></div><div class="auth-backdrop orb-two"></div>
     <div class="auth-card">
       <div class="auth-intro">
@@ -52,7 +62,7 @@
       <div class="brand"><div class="brand-icon">S<span>●</span></div><div><strong>synergia<span>pocket</span></strong><small>Twoja szkolna przestrzeń</small></div></div>
       <div class="sidebar-section-label">MENU GŁÓWNE</div>
       <nav id="main-nav" aria-label="Nawigacja">
-        <button data-page="dashboard" class="nav-link active"><span class="nav-glyph">⌂</span> Pulpit <span class="nav-arrow">›</span></button>
+        <button data-page="dashboard" class="nav-link active"><span class="nav-glyph">⌂</span> Oś czasu <span class="nav-arrow">›</span></button>
         <button data-page="timetable" class="nav-link"><span class="nav-glyph">▦</span> Plan lekcji</button>
         <button data-page="grades" class="nav-link"><span class="nav-glyph">✦</span> Oceny</button>
         <button data-page="attendance" class="nav-link"><span class="nav-glyph">◴</span> Frekwencja</button>
@@ -70,8 +80,18 @@
     <div class="main-shell">
       <header class="topbar">
         <button class="mobile-menu" id="menu-btn" aria-label="Otwórz menu">☰</button>
-        <div class="breadcrumb">Moja szkoła <span>/</span> <strong id="breadcrumb-name">Pulpit</strong></div>
+        <div class="breadcrumb">Moja szkoła <span>/</span> <strong id="breadcrumb-name">Oś czasu</strong></div>
+        <div class="mobile-wordmark">synergia<span>pocket</span></div>
         <div class="top-actions">
+          <div class="theme-picker">
+            <button class="theme-trigger" type="button" data-theme-trigger aria-label="Motyw wyglądu" aria-expanded="false" title="Wybierz motyw">◐</button>
+            <div class="theme-menu hidden" role="group" aria-label="Motyw wyglądu">
+              <strong>Wygląd aplikacji</strong>
+              <button type="button" data-theme-choice="light">☀️ <span>Jasny</span><span class="theme-check">✓</span></button>
+              <button type="button" data-theme-choice="dark">☾ <span>Ciemny</span><span class="theme-check">✓</span></button>
+              <button type="button" data-theme-choice="system">◐ <span>Automatyczny</span><span class="theme-check">✓</span></button>
+            </div>
+          </div>
           <div class="profile-control" id="profile-control">
             <button type="button" class="profile-trigger" id="profile-trigger" aria-expanded="false" aria-controls="profile-menu" aria-label="Zmień profil dziecka">
               <span class="profile-trigger-icon">◉</span><span id="active-profile-name" class="profile-trigger-name">Profil</span><span aria-hidden="true">⌄</span>
@@ -97,10 +117,10 @@
     </div>
     <nav class="bottom-nav" aria-label="Szybka nawigacja">
       <button data-page="dashboard" class="bottom-link active"><span>⌂</span>Start</button>
-      <button data-page="timetable" class="bottom-link"><span>▦</span>Plan</button>
       <button data-page="grades" class="bottom-link"><span>✦</span>Oceny</button>
-      <button data-page="homework" class="bottom-link"><span>✎</span>Zadania</button>
+      <button data-page="timetable" class="bottom-link"><span>▦</span>Plan</button>
       <button data-page="messages" class="bottom-link"><span>✉</span>Poczta</button>
+      <button data-page="homework" class="bottom-link"><span>✎</span>Zadania</button>
     </nav>
     <div id="sidebar-mask" class="sidebar-mask hidden"></div>
   </div>

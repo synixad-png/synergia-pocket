@@ -1,4 +1,4 @@
-# SYNERGIA POCKET WEB v4 — przeglądarka telefonu, bez programu Windows
+# SYNERGIA POCKET WEB v4.1 — MOTYWY — przeglądarka telefonu, bez programu Windows
 
 **Nieoficjalny prototyp do użytku prywatnego**, niepowiązany z firmą Librus.
 
@@ -49,3 +49,11 @@ Pulpit, oceny, plan lekcji, frekwencja, terminarz, zadania domowe, wiadomości, 
 **Zasady ochrony danych:** profile przechowywane są tylko w RAM serwera w ramach jednej sesji przeglądarki; osobne klienty Synergia i cache dla każdej córki. Login i hasło trafiają przez HTTPS do serwera do autoryzacji; aplikacja nie zapisuje ich w plikach ani pamięci przeglądarki. Biblioteka uwierzytelniająca może przetrzymywać dane w pamięci procesu. Wspólna sesja przeglądarki daje dostęp do obu profili, więc pożyczając telefon należy się wylogować. Sesja kończy się po godzinie nieaktywności; restart/usypianie bezpłatnego serwera może ją przerwać wcześniej. Po wylogowaniu trzeba wprowadzić dane obu kont na nowo.
 
 **Testy:** `python -m pytest -q` (17 testów backend i kontraktów) oraz opcjonalnie `python tests/browser_check.py` z zainstalowanym Playwright i Chromium (test interfejsu z fikcyjnymi danymi, bez kontaktu z Librusem). Nie wykonano próby logowania na prawdziwych kontach.
+
+## Motywy i układ mobilny (v4.1)
+
+Na ekranie logowania oraz w górnym pasku aplikacji kliknij ikonę słońca/księżyca i wybierz: **Jasny, Ciemny lub Automatyczny**. Automatyczny śledzi ustawienie systemu. W przeglądarce zapisywany jest wyłącznie wybór motywu (`localStorage`); brak tokenów i haseł w tym miejscu.
+
+Na telefonie ekran startowy ma oś czasu, kolory rozróżniające typy wpisów, pasek dolnej nawigacji, przełącznik dwóch profili i osobne listy ocen. Projekt jest wizualnie inspirowany konwencją dzienników szkolnych, ale nie kopiuje marki ani kodu Librusa.
+
+Nie zmieniono endpointów i sposobu przechowywania sesji w v4. Po restarcie/uśpieniu darmowego Render konieczne może być ponowne zalogowanie — nie wdrożono przerwanych prac nad sejfem z v5.

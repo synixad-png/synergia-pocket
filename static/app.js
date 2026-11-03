@@ -1,9 +1,9 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const labels = { dashboard:'Pulpit', timetable:'Plan lekcji', grades:'Oceny', attendance:'Frekwencja', agenda:'Terminarz', homework:'Zadania domowe', messages:'Wiadomości', notes:'Uwagi', announcements:'Ogłoszenia' };
+const labels = { dashboard:'Oś czasu', timetable:'Plan lekcji', grades:'Oceny', attendance:'Frekwencja', agenda:'Terminarz', homework:'Zadania domowe', messages:'Wiadomości', notes:'Uwagi', announcements:'Ogłoszenia' };
 const today = new Date();
-const state = { user:null, page:'dashboard', week: monday(today), mailbox:'inbox', loading:0, messageEpoch:0, messages:[], refresh:false, profileFormMode:'add' };
+const state = { user:null, page:'dashboard', week: monday(today), mailbox:'inbox', loading:0, messageEpoch:0, messages:[], refresh:false, profileFormMode:'add', selectedDayIndex:Math.min(4,Math.max(0,(today.getDay()+6)%7)) };
 const plDate = new Intl.DateTimeFormat('pl-PL',{day:'numeric',month:'long',year:'numeric'});
 const plShort = new Intl.DateTimeFormat('pl-PL',{day:'numeric',month:'short'});
 const weekday = new Intl.DateTimeFormat('pl-PL',{weekday:'short'});
@@ -145,9 +145,18 @@ async function dashboard() {
   const upcomingRows=upcoming.map(x=>`<div class="mini-row"><span class="subject-mark teal">${esc((x.date||'').slice(8,10))}</span><div class="mini-body"><strong>${esc(x.title||'Wydarzenie')}</strong><small>${esc(x.subject||x.description||'')}</small></div><span class="mini-trailing">${dateLabel(x.date,true)}</span></div>`).join('');
   const taskRows=tasks.map(x=>`<div class="mini-row"><span class="subject-mark gold">✎</span><div class="mini-body"><strong>${esc(x.topic)}</strong><small>${esc(x.text)}</small></div><span class="mini-trailing">${dateLabel(x.due_date,true)}</span></div>`).join('');
   const failed=[grades,timetable,attendance,agenda,messages,homework].some(x=>x===null);
+  // Mobilna oś czasu — własny układ inspirowany przejrzystą nawigacją aplikacji szkolnych.
+  const feed = [
+    ...newest.slice(0,4).map(x=>({date:x.date,type:'Ocena',title:x.subject,description:`${x.category||'Nowa ocena'} · ${x.value}`,icon:esc(x.value),page:'grades',kind:'grade'})),
+    ...(messages?.items||[]).slice(0,2).map(x=>({date:x.date,type:'Wiadomość',title:x.subject||'Wiadomość ze szkoły',description:x.sender||'Nauczyciel',icon:'✉',page:'messages',kind:'message'})),
+    ...tasks.slice(0,2).map(x=>({date:x.date||x.due_date,type:'Zadanie',title:x.topic||'Zadanie domowe',description:`Termin: ${dateLabel(x.due_date,true)}`,icon:'✎',page:'homework',kind:'task'})),
+    ...upcoming.slice(0,2).map(x=>({date:x.date,type:'Terminarz',title:x.title||'Wydarzenie',description:x.subject||'Zobacz szczegóły',icon:'▣',page:'agenda',kind:'event'}))
+  ].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).slice(0,7);
+  const timeline = `<section class="mobile-timeline" aria-label="Oś czasu"><div class="mobile-timeline-heading"><h2>Oś czasu</h2><span>Najnowsze informacje ze szkoły</span></div>`+
+    (feed.length?feed.map(x=>`<button type="button" class="timeline-item timeline-${x.kind}" data-page="${x.page}"><span class="timeline-icon">${x.icon}</span><span class="timeline-copy"><small>${esc(x.type)} · ${dateLabel(x.date,true)}</small><strong>${esc(x.title)}</strong><span>${esc(x.description)}</span></span><span class="timeline-arrow">›</span></button>`).join(''):empty('Nie ma jeszcze wpisów na osi czasu.'))+`</section>`;
   return `<div class="welcome"><div><span class="eyebrow eyebrow-light">TWÓJ SZKOLNY DZIEŃ</span><h2>Dzień dobry, ${esc(state.user?.name?.split(' ')[0]||'Uczniu')}! 👋</h2><p>Przejrzyj najważniejsze informacje. Wszystko w jednym spokojnym miejscu.</p></div><span class="welcome-chip">${esc(weekday.format(today))} · ${esc(plShort.format(today))}</span></div>`+
     (failed?'<div class="error-box dashboard-error">Niektóre sekcje są chwilowo niedostępne. Pozostałe dane wyświetlamy normalnie.</div>':'')+
-    `<div class="dashboard-grid">${cards}</div><div class="two-cols"><div>${panel('Ostatnie oceny',rows||empty('Brak ocen.'),'<button class="section-more" data-page="grades">Zobacz wszystkie →</button>')}${panel('Najbliższe wydarzenia',upcomingRows||empty('Brak nadchodzących wydarzeń.'),'<button class="section-more" data-page="agenda">Terminarz →</button>')}</div><div>${panel('Zadania do wykonania',taskRows||empty('Brak aktualnych zadań.'),'<button class="section-more" data-page="homework">Wszystkie →</button>')}${panel('Dzisiaj na planie',nowLessons.length?nowLessons.map(x=>`<div class="mini-row"><div class="mini-body"><strong>${esc(x.subject)}</strong><small>${esc(cleanHour(x.start))}–${esc(cleanHour(x.end))} · Sala ${esc(x.room||'—')}</small></div></div>`).join(''):empty('Dzisiaj nie ma lekcji.'),'<button class="section-more" data-page="timetable">Cały plan →</button>')}</div></div>`;
+    `<div class="dashboard-grid">${cards}</div>${timeline}<div class="two-cols"><div>${panel('Ostatnie oceny',rows||empty('Brak ocen.'),'<button class="section-more" data-page="grades">Zobacz wszystkie →</button>')}${panel('Najbliższe wydarzenia',upcomingRows||empty('Brak nadchodzących wydarzeń.'),'<button class="section-more" data-page="agenda">Terminarz →</button>')}</div><div>${panel('Zadania do wykonania',taskRows||empty('Brak aktualnych zadań.'),'<button class="section-more" data-page="homework">Wszystkie →</button>')}${panel('Dzisiaj na planie',nowLessons.length?nowLessons.map(x=>`<div class="mini-row"><div class="mini-body"><strong>${esc(x.subject)}</strong><small>${esc(cleanHour(x.start))}–${esc(cleanHour(x.end))} · Sala ${esc(x.room||'—')}</small></div></div>`).join(''):empty('Dzisiaj nie ma lekcji.'),'<button class="section-more" data-page="timetable">Cały plan →</button>')}</div></div>`;
 }
 function gradeKindClass(value) { const n=parseInt(value,10); return n<=2?'low':n===3?'mid':n>=5?'good':''; }
 function renderGrades(d) {
@@ -157,8 +166,9 @@ function renderGrades(d) {
 function renderTimetable(d) {
   const end=addDays(state.week,4);
   const controls=`<div class="week-controls"><button class="week-arrow" data-action="week-prev" title="Poprzedni tydzień">‹</button><span class="week-title">${esc(plShort.format(state.week))} – ${esc(plShort.format(end))}</span><button class="week-arrow" data-action="week-next" title="Następny tydzień">›</button><button class="button button-outline button-sm" data-action="week-today">Dziś</button></div>`;
-  const days=(d.days||[]).map(day=>`<div class="day-col"><div class="day-header"><strong>${esc(weekday.format(dateObj(day.date)||today))}</strong><small>${dateLabel(day.date,true)}</small></div>${(day.lessons||[]).map(x=>`<div class="lesson-card ${x.canceled?'canceled':''} ${x.substitution?'substitution':''}"><div class="lesson-meta"><span>${esc(x.num??'—')}. lekcja</span><span>${esc(cleanHour(x.start))}–${esc(cleanHour(x.end))}</span></div><div class="lesson-subject">${esc(x.subject)}</div><div class="lesson-detail">${esc(x.teacher||'Nauczyciel niepodany')} · sala ${esc(x.room||'—')}</div>${x.canceled?'<div class="lesson-note">Odwołana</div>':''}${x.substitution?`<div class="lesson-note">Zastępstwo${x.original_subject?' za '+esc(x.original_subject):''}</div>`:''}${x.note?`<div class="lesson-note">${esc(x.note)}</div>`:''}</div>`).join('')||empty('Bez lekcji')}</div>`).join('');
-  return head('Plan lekcji','Bieżący tydzień, odwołane zajęcia i zastępstwa.',controls)+`<div class="panel timetable-wrap"><div class="week-grid">${days||empty('Brak planu lekcji.')}</div></div>`;
+  const dayTabs=`<div class="mobile-daytabs" aria-label="Wybierz dzień tygodnia">${(d.days||[]).map((day,i)=>`<button type="button" class="day-tab ${state.selectedDayIndex===i?'active':''}" data-action="day-select" data-day-index="${i}" aria-pressed="${state.selectedDayIndex===i}"><small>${esc(weekday.format(dateObj(day.date)||today))}</small><strong>${esc((day.date||'').slice(8,10))}</strong></button>`).join('')}</div>`;
+  const days=(d.days||[]).map((day,i)=>`<div class="day-col ${state.selectedDayIndex===i?'active':''}"><div class="day-header"><strong>${esc(weekday.format(dateObj(day.date)||today))}</strong><small>${dateLabel(day.date,true)}</small></div>${(day.lessons||[]).map(x=>`<div class="lesson-card ${x.canceled?'canceled':''} ${x.substitution?'substitution':''}"><div class="lesson-meta"><span>${esc(x.num??'—')}. lekcja</span><span>${esc(cleanHour(x.start))}–${esc(cleanHour(x.end))}</span></div><div class="lesson-subject">${esc(x.subject)}</div><div class="lesson-detail">${esc(x.teacher||'Nauczyciel niepodany')} · sala ${esc(x.room||'—')}</div>${x.canceled?'<div class="lesson-note">Odwołana</div>':''}${x.substitution?`<div class="lesson-note">Zastępstwo${x.original_subject?' za '+esc(x.original_subject):''}</div>`:''}${x.note?`<div class="lesson-note">${esc(x.note)}</div>`:''}</div>`).join('')||empty('Bez lekcji')}</div>`).join('');
+  return head('Plan lekcji','Bieżący tydzień, odwołane zajęcia i zastępstwa.',controls)+dayTabs+`<div class="panel timetable-wrap"><div class="week-grid">${days||empty('Brak planu lekcji.')}</div></div>`;
 }
 function renderAttendance(d) {
   const s=d.stats||{total:0,present:0,late:0,excused:0,absent:0};
@@ -202,6 +212,31 @@ async function openMessage(i) {
 }
 function closeDialog() { $('message-dialog').classList.add('hidden'); }
 function initEvents() {
+  // Przełącznik wyglądu jest dostępny również przed logowaniem.
+  document.addEventListener('click', (event) => {
+    const themeOption = event.target.closest('button[data-theme-choice]');
+    if (themeOption) {
+      window.SynergiaTheme?.set(themeOption.dataset.themeChoice);
+      document.querySelectorAll('.theme-menu').forEach(menu=>menu.classList.add('hidden'));
+      document.querySelectorAll('[data-theme-trigger]').forEach(button=>button.setAttribute('aria-expanded','false'));
+      return;
+    }
+    const trigger=event.target.closest('[data-theme-trigger]');
+    if (trigger) {
+      const picker=trigger.closest('.theme-picker');
+      const menu=picker.querySelector('.theme-menu');
+      const shouldOpen=menu.classList.contains('hidden');
+      document.querySelectorAll('.theme-menu').forEach(node=>node.classList.add('hidden'));
+      document.querySelectorAll('[data-theme-trigger]').forEach(button=>button.setAttribute('aria-expanded','false'));
+      menu.classList.toggle('hidden',!shouldOpen);
+      trigger.setAttribute('aria-expanded',String(shouldOpen));
+      return;
+    }
+    if (!event.target.closest('.theme-picker')) {
+      document.querySelectorAll('.theme-menu').forEach(menu=>menu.classList.add('hidden'));
+      document.querySelectorAll('[data-theme-trigger]').forEach(button=>button.setAttribute('aria-expanded','false'));
+    }
+  });
   $('login-form').addEventListener('submit', async (e)=>{
     e.preventDefault(); $('login-error').textContent=''; const btn=$('login-btn'); btn.disabled=true; btn.textContent='Łączenie…';
     try { const user=await request('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login:$('login').value,password:$('password').value,label:$('login-label').value})}); showApp(user); }
@@ -240,7 +275,7 @@ function initEvents() {
   $('sidebar-mask').addEventListener('click',closeSidebar);
   $('dialog-close').addEventListener('click',closeDialog);
   $('message-dialog').addEventListener('click',e=>{if(e.target===$('message-dialog'))closeDialog();});
-  window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDialog();closeProfileOverlay();}});
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDialog();closeProfileOverlay();document.querySelectorAll('.theme-menu').forEach(menu=>menu.classList.add('hidden'));}});
   document.addEventListener('click',e=>{
     const profileButton=e.target.closest('button[data-profile-switch],button[data-profile-remove]');
     if(profileButton){if(profileButton.dataset.profileSwitch)switchProfile(profileButton.dataset.profileSwitch);else removeProfile(profileButton.dataset.profileRemove);return;}
@@ -248,8 +283,9 @@ function initEvents() {
     const btn=e.target.closest('button[data-page],button[data-action]'); if(!btn) return;
     if(btn.dataset.page) { navigate(btn.dataset.page); return; }
     const action=btn.dataset.action;
-    if(action==='week-prev'||action==='week-next'){state.week=addDays(state.week,action==='week-prev'?-7:7);navigate('timetable');}
-    else if(action==='week-today'){state.week=monday(new Date());navigate('timetable');}
+    if(action==='day-select'){state.selectedDayIndex=Math.min(4,Math.max(0,Number(btn.dataset.dayIndex)||0));document.querySelectorAll('.day-tab,.day-col').forEach(el=>{const active=Number(el.dataset.dayIndex??[...el.parentElement.children].indexOf(el))===state.selectedDayIndex;el.classList.toggle('active',active);if(el.matches('.day-tab'))el.setAttribute('aria-pressed',String(active));});}
+    else if(action==='week-prev'||action==='week-next'){state.week=addDays(state.week,action==='week-prev'?-7:7);navigate('timetable');}
+    else if(action==='week-today'){state.week=monday(new Date());state.selectedDayIndex=Math.min(4,Math.max(0,(new Date().getDay()+6)%7));navigate('timetable');}
     else if(action==='inbox'||action==='outbox'){state.mailbox=action;navigate('messages');}
     else if(action==='message')openMessage(Number(btn.dataset.index));
     else if(action==='retry')navigate(state.page);
