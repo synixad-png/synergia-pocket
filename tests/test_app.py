@@ -113,9 +113,10 @@ def test_mock_live_login_without_contacting_librus(monkeypatch):
         assert r.status_code==200, r.text
         assert r.json()['name']=='Uczeń Testowy'
         user=next(iter(SESSIONS.values()))
-        assert user.librus.credentials==('user123','dummy-secret')
+        client_to_close = user.librus
+        assert client_to_close.credentials==('user123','dummy-secret')
         assert client.get('/api/section/grades').json()['count']==1
         assert client.get('/api/section/messages').json()['unread']==2
         assert client.post('/api/logout').json()['ok']
-        assert user.librus.closed
+        assert client_to_close.closed
         assert client.get('/api/session').json()['authenticated'] is False

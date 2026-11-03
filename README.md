@@ -1,4 +1,4 @@
-# SYNERGIA POCKET WEB v3 — przeglądarka telefonu, bez programu Windows
+# SYNERGIA POCKET WEB v4 — przeglądarka telefonu, bez programu Windows
 
 **Nieoficjalny prototyp do użytku prywatnego**, niepowiązany z firmą Librus.
 
@@ -19,7 +19,7 @@ To jest jednorazowe opublikowanie aplikacji. Codzienne używanie nie wymaga Wind
 
 ## TRYB DEMO
 
-`SYNERGIA_POCKET_WEB_v3_DEMO.html` otwiera się jako lokalna strona HTML — bez serwera i bez logowania. Dane są fikcyjne. **Nie wpisuj tam prawdziwego hasła.**
+`SYNERGIA_POCKET_WEB_v4_DEMO.html` otwiera się jako lokalna strona HTML — bez serwera i bez logowania. Dane są fikcyjne. **Nie wpisuj tam prawdziwego hasła.**
 
 ## ZAKŁADKI
 
@@ -38,3 +38,14 @@ Pulpit, oceny, plan lekcji, frekwencja, terminarz, zadania domowe, wiadomości, 
 `python -m pytest -q` (testy mock/demo, kontrakt frontend, podstawowe bezpieczeństwo). Nie zastępują testu integracyjnego Synergia i interaktywnego testu na smartfonie.
 
 `python -m uvicorn app:app --host 127.0.0.1 --port 8765` — wyłącznie opcjonalny lokalny test deweloperski.
+
+## DWA OSOBNE KONTA — PRZEŁĄCZANIE PROFILI (v4)
+
+1. Otwórz aplikację i zaloguj się na konto pierwszej córki. Opcjonalnie nadaj jej nazwę w polu „Nazwa pierwszego profilu”.
+2. W prawym górnym rogu kliknij nazwę profilu i wybierz „Dodaj drugie konto”.
+3. Podaj nazwę oraz oddzielny login i hasło Synergia drugiej córki. Nie wpisuj danych w GitHubie ani Renderze.
+4. Od tej chwili kliknięciem nazwy w nagłówku możesz przełączać aktywną córkę. Wyświetlane oceny, plan i wiadomości są przypisane do danego profilu. Można zmienić etykietę profilu lub usunąć jego sesję.
+
+**Zasady ochrony danych:** profile przechowywane są tylko w RAM serwera w ramach jednej sesji przeglądarki; osobne klienty Synergia i cache dla każdej córki. Login i hasło trafiają przez HTTPS do serwera do autoryzacji; aplikacja nie zapisuje ich w plikach ani pamięci przeglądarki. Biblioteka uwierzytelniająca może przetrzymywać dane w pamięci procesu. Wspólna sesja przeglądarki daje dostęp do obu profili, więc pożyczając telefon należy się wylogować. Sesja kończy się po godzinie nieaktywności; restart/usypianie bezpłatnego serwera może ją przerwać wcześniej. Po wylogowaniu trzeba wprowadzić dane obu kont na nowo.
+
+**Testy:** `python -m pytest -q` (17 testów backend i kontraktów) oraz opcjonalnie `python tests/browser_check.py` z zainstalowanym Playwright i Chromium (test interfejsu z fikcyjnymi danymi, bez kontaktu z Librusem). Nie wykonano próby logowania na prawdziwych kontach.

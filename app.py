@@ -28,8 +28,7 @@ async def lifespan(_app):
     yield
     for token in list(SESSIONS):
         session = SESSIONS.pop(token)
-        if session.librus:
-            await session.librus.close()
+        await close_session_clients(session)
 
 
 app = FastAPI(title="Synergia Pocket", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -37,6 +36,7 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 SECTIONS = {"grades", "timetable", "attendance", "agenda", "homework", "messages", "notes", "announcements"}
 SESSION_IDLE = 60 * 60
 CACHE_SECONDS = 180
+MAX_PROFILES = 2
 # Ustaw SYNERGIA_FORCE_HTTPS=1 na hostingu za terminatorem TLS.
 FORCE_HTTPS = os.getenv("SYNERGIA_FORCE_HTTPS", "0") == "1"
 LOGIN_WINDOW = 600
@@ -61,13 +61,41 @@ def throttle_login(login: str) -> None:
 
 
 @dataclass
-class Session:
-    mode: str
+class Profile:
+    id: str
     name: str
+    mode: str
     librus: Any = None
-    last_seen: float = field(default_factory=time.monotonic)
+    login_fingerprint: str | None = None
     cache: dict[str, tuple[float, dict[str, Any]]] = field(default_factory=dict)
+
+
+@dataclass
+class Session:
+    profiles: dict[str, Profile] = field(default_factory=dict)
+    active_profile_id: str = ""
+    last_seen: float = field(default_factory=time.monotonic)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    @property
+    def active(self) -> Profile:
+        return self.profiles[self.active_profile_id]
+
+    @property
+    def mode(self) -> str:
+        return self.active.mode
+
+    @property
+    def name(self) -> str:
+        return self.active.name
+
+    @property
+    def librus(self) -> Any:
+        return self.active.librus
+
+    @property
+    def cache(self) -> dict:
+        return self.active.cache
 
 
 SESSIONS: dict[str, Session] = {}
@@ -76,6 +104,52 @@ SESSIONS: dict[str, Session] = {}
 class LoginBody(BaseModel):
     login: str = Field(min_length=1, max_length=128)
     password: str = Field(min_length=1, max_length=256)
+    label: str | None = Field(default=None, max_length=40)
+
+
+class ProfileIdBody(BaseModel):
+    profile_id: str = Field(min_length=1, max_length=80)
+
+
+class RenameProfileBody(ProfileIdBody):
+    label: str = Field(min_length=1, max_length=40)
+
+
+def login_fingerprint(login: str) -> str:
+    return hashlib.sha256(login.strip().casefold().encode("utf-8")).hexdigest()
+
+
+def clean_label(label: str | None, default: str) -> str:
+    value = re.sub(r"[\x00-\x1f\x7f]", " ", label or str(default or "Uczeń")).strip()
+    return value[:40] or "Uczeń"
+
+
+def profile_payload(session: Session) -> dict[str, Any]:
+    return {
+        "authenticated": True,
+        "mode": session.mode,
+        "name": session.name,
+        "active_profile_id": session.active_profile_id,
+        "profiles": [{"id": profile.id, "name": profile.name, "mode": profile.mode}
+                     for profile in session.profiles.values()],
+    }
+
+
+async def close_session_clients(session: Session) -> None:
+    async with session.lock:
+        for profile in list(session.profiles.values()):
+            if profile.librus is not None:
+                try:
+                    await profile.librus.close()
+                except Exception:
+                    LOG.warning("Problem podczas zamykania sesji Synergia")
+        session.profiles.clear()
+        session.active_profile_id = ""
+
+
+def make_profile(mode: str, name: str, librus: Any = None, fingerprint: str | None = None) -> Profile:
+    return Profile(id=secrets.token_urlsafe(16), name=clean_label(name, "Uczeń"),
+                   mode=mode, librus=librus, login_fingerprint=fingerprint)
 
 
 def error(status: int, message: str) -> HTTPException:
@@ -84,6 +158,8 @@ def error(status: int, message: str) -> HTTPException:
 
 def require_origin(request: Request) -> None:
     origin = request.headers.get("origin")
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        raise error(403, "Nieprawidłowe pochodzenie żądania.")
     if origin:
         # Na hostingu TLS jest zwykle terminowany przed aplikacją Python.
         expected_scheme = "https" if FORCE_HTTPS else request.url.scheme
@@ -97,20 +173,27 @@ async def prune_sessions() -> None:
     stale = [token for token, session in list(SESSIONS.items()) if now - session.last_seen > SESSION_IDLE]
     for token in stale:
         session = SESSIONS.pop(token, None)
-        if session and session.librus:
-            try:
-                await session.librus.close()
-            except Exception:
-                LOG.warning("Nie udało się zamknąć wygasłej sesji")
+        if session:
+            await close_session_clients(session)
 
 
 async def get_session(request: Request) -> Session:
     token = request.cookies.get("synergia_session", "")
     session = SESSIONS.get(token)
-    if session is None or time.monotonic() - session.last_seen > SESSION_IDLE:
+    if session is None:
+        raise error(401, "Sesja wygasła. Zaloguj się ponownie.")
+    if time.monotonic() - session.last_seen > SESSION_IDLE:
+        SESSIONS.pop(token, None)
+        await close_session_clients(session)
         raise error(401, "Sesja wygasła. Zaloguj się ponownie.")
     session.last_seen = time.monotonic()
     return session
+
+
+def assert_session_current(request: Request, session: Session) -> None:
+    # Chroni przed użyciem sesji zamkniętej w trakcie równoległego żądania.
+    if SESSIONS.get(request.cookies.get("synergia_session", "")) is not session or not session.profiles:
+        raise error(401, "Sesja wygasła. Zaloguj się ponownie.")
 
 
 def set_cookie(response: JSONResponse, token: str, request: Request) -> None:
@@ -120,7 +203,10 @@ def set_cookie(response: JSONResponse, token: str, request: Request) -> None:
 
 def new_session(mode: str, name: str, librus: Any = None) -> tuple[str, Session]:
     token = secrets.token_urlsafe(32)
-    session = Session(mode, name, librus)
+    session = Session()
+    profile = make_profile(mode, name, librus)
+    session.profiles[profile.id] = profile
+    session.active_profile_id = profile.id
     SESSIONS[token] = session
     return token, session
 
@@ -156,10 +242,14 @@ async def index():
 async def session_info(request: Request):
     token = request.cookies.get("synergia_session", "")
     session = SESSIONS.get(token)
-    if not session or time.monotonic() - session.last_seen > SESSION_IDLE:
+    if not session:
+        return {"authenticated": False}
+    if time.monotonic() - session.last_seen > SESSION_IDLE:
+        SESSIONS.pop(token, None)
+        await close_session_clients(session)
         return {"authenticated": False}
     session.last_seen = time.monotonic()
-    return {"authenticated": True, "mode": session.mode, "name": session.name}
+    return profile_payload(session)
 
 
 @app.post("/api/demo")
@@ -168,28 +258,25 @@ async def start_demo(request: Request):
     await prune_sessions()
     old_token = request.cookies.get("synergia_session", "")
     old = SESSIONS.pop(old_token, None)
-    if old and old.librus:
-        await old.librus.close()
+    if old:
+        await close_session_clients(old)
     token, session = new_session("demo", "Aleksandra Nowak")
-    response = JSONResponse({"authenticated": True, "mode": session.mode, "name": session.name})
+    response = JSONResponse(profile_payload(session))
     set_cookie(response, token, request)
     return response
 
 
-@app.post("/api/login")
-async def login(body: LoginBody, request: Request):
-    require_origin(request)
-    await prune_sessions()
-    throttle_login(body.login)
+async def connect_librus(login: str, password: str) -> tuple[Any, str]:
+    """Tworzy klienta. Hasło nie jest zapisywane na dysku ani wysyłane do frontendowych ustawień."""
     try:
         from librus_synergia import Librus
         from librus_synergia.exceptions import LibrusInvalidCredentialsError, LibrusCaptchaRequiredError, LibrusError
     except ImportError:
-        raise error(503, "Nie zainstalowano librus-synergia. Uruchom instalator zależności z README.")
-    client = Librus(body.login.strip(), body.password, cache_reference_data=True, max_concurrent_requests=3)
+        raise error(503, "Nie zainstalowano biblioteki librus-synergia.")
+    client = Librus(login.strip(), password, cache_reference_data=True, max_concurrent_requests=3)
     try:
         student = await client.me()
-        name = getattr(student, "display_name", "Uczeń") or "Uczeń"
+        return client, str(getattr(student, "display_name", "Uczeń") or "Uczeń")
     except LibrusInvalidCredentialsError:
         await client.close()
         raise error(401, "Nieprawidłowy login lub hasło Synergia.")
@@ -202,17 +289,99 @@ async def login(body: LoginBody, request: Request):
         raise error(502, f"Błąd Synergia ({type(exc).__name__}). Spróbuj później.")
     except Exception:
         await client.close()
-        LOG.exception("Niespodziewany problem podczas logowania")
+        LOG.warning("Niespodziewany problem podczas logowania do Synergii")
         raise error(502, "Nie udało się połączyć z Synergią.")
-    # Nie przechowujemy loginu i hasła w plikach; klient i sesja żyją tylko w pamięci procesu.
+
+
+@app.post("/api/login")
+async def login(body: LoginBody, request: Request):
+    require_origin(request)
+    await prune_sessions()
+    throttle_login(body.login)
+    client, name = await connect_librus(body.login, body.password)
     old_token = request.cookies.get("synergia_session", "")
     old = SESSIONS.pop(old_token, None)
-    if old and old.librus:
-        await old.librus.close()
-    token, session = new_session("live", name, client)
-    response = JSONResponse({"authenticated": True, "mode": session.mode, "name": session.name})
+    if old:
+        await close_session_clients(old)
+    token, session = new_session("live", clean_label(body.label, name), client)
+    session.active.login_fingerprint = login_fingerprint(body.login)
+    response = JSONResponse(profile_payload(session))
     set_cookie(response, token, request)
     return response
+
+
+@app.get("/api/profiles")
+async def list_profiles(request: Request):
+    return profile_payload(await get_session(request))
+
+
+@app.post("/api/profiles/add")
+async def add_profile(body: LoginBody, request: Request):
+    require_origin(request)
+    session = await get_session(request)
+    async with session.lock:
+        assert_session_current(request, session)
+        if session.mode == "demo":
+            raise error(409, "Wyjdź z trybu demo, aby dodać prawdziwe konto.")
+        if len(session.profiles) >= MAX_PROFILES:
+            raise error(409, "Można dodać najwyżej dwa profile.")
+        fingerprint = login_fingerprint(body.login)
+        if any(x.login_fingerprint == fingerprint for x in session.profiles.values()):
+            raise error(409, "To konto jest już dodane.")
+        throttle_login(body.login)
+        client, name = await connect_librus(body.login, body.password)
+        profile = make_profile("live", clean_label(body.label, name), client, fingerprint)
+        session.profiles[profile.id] = profile
+        session.active_profile_id = profile.id
+        return profile_payload(session)
+
+
+@app.post("/api/profiles/switch")
+async def switch_profile(body: ProfileIdBody, request: Request):
+    require_origin(request)
+    session = await get_session(request)
+    async with session.lock:
+        assert_session_current(request, session)
+        if body.profile_id not in session.profiles:
+            raise error(404, "Nie znaleziono profilu w tej sesji.")
+        session.active_profile_id = body.profile_id
+        return profile_payload(session)
+
+
+@app.post("/api/profiles/remove")
+async def remove_profile(body: ProfileIdBody, request: Request):
+    require_origin(request)
+    session = await get_session(request)
+    async with session.lock:
+        assert_session_current(request, session)
+        if body.profile_id not in session.profiles:
+            raise error(404, "Nie znaleziono profilu w tej sesji.")
+        if len(session.profiles) <= 1:
+            raise error(409, "Ostatni profil można zakończyć przez wylogowanie.")
+        profile = session.profiles.pop(body.profile_id)
+        if session.active_profile_id == body.profile_id:
+            session.active_profile_id = next(iter(session.profiles))
+        if profile.librus is not None:
+            try:
+                await profile.librus.close()
+            except Exception:
+                LOG.warning("Problem z zamknięciem usuwanego profilu")
+        return profile_payload(session)
+
+
+@app.post("/api/profiles/rename")
+async def rename_profile(body: RenameProfileBody, request: Request):
+    require_origin(request)
+    session = await get_session(request)
+    label = body.label.strip()
+    if not label:
+        raise error(400, "Podaj nazwę profilu.")
+    async with session.lock:
+        assert_session_current(request, session)
+        if body.profile_id not in session.profiles:
+            raise error(404, "Nie znaleziono profilu w tej sesji.")
+        session.profiles[body.profile_id].name = label
+        return profile_payload(session)
 
 
 @app.post("/api/logout")
@@ -220,8 +389,8 @@ async def logout(request: Request):
     require_origin(request)
     token = request.cookies.get("synergia_session", "")
     session = SESSIONS.pop(token, None)
-    if session and session.librus:
-        await session.librus.close()
+    if session:
+        await close_session_clients(session)
     response = JSONResponse({"ok": True})
     response.delete_cookie("synergia_session", path="/")
     return response
@@ -376,18 +545,21 @@ async def get_section(section: str, request: Request, week: str | None = None, m
             raise error(400, "Data poza dozwolonym zakresem")
     key = f"{section}:{week or ''}:{mailbox}"
     async with session.lock:
-        old = session.cache.get(key)
+        assert_session_current(request, session)
+        # Cache należy do konkretnego profilu, nie do sesji wspólnej.
+        profile = session.active
+        old = profile.cache.get(key)
         if old and time.monotonic() - old[0] < CACHE_SECONDS and not refresh:
             return old[1]
         try:
-            result = demo_section(section, day, mailbox) if session.mode == "demo" else \
-                await live_section(session.librus, section, day, mailbox)
+            result = demo_section(section, day, mailbox) if profile.mode == "demo" else \
+                await live_section(profile.librus, section, day, mailbox)
         except HTTPException:
             raise
         except Exception as exc:
             LOG.warning("Błąd pobierania %s: %s", section, type(exc).__name__)
             raise error(502, f"Nie udało się pobrać sekcji {section} z Synergii ({type(exc).__name__}).")
-        session.cache[key] = (time.monotonic(), result)
+        profile.cache[key] = (time.monotonic(), result)
         return result
 
 
@@ -396,23 +568,26 @@ async def get_message(message_id: str, request: Request, mailbox: str = "inbox")
     session = await get_session(request)
     if mailbox not in ("inbox", "outbox") or not 1 <= len(message_id) <= 160:
         raise error(400, "Nieprawidłowe parametry wiadomości")
-    if session.mode == "demo":
-        result = demo_message(message_id, mailbox)
-    else:
-        try:
-            msg = await session.librus.message(message_id, mailbox)
-        except Exception as exc:
-            LOG.warning("Błąd odczytu wiadomości: %s", type(exc).__name__)
-            raise error(502, "Nie udało się pobrać treści wiadomości")
-        if msg is None:
+    async with session.lock:
+        assert_session_current(request, session)
+        profile = session.active
+        if profile.mode == "demo":
+            result = demo_message(message_id, mailbox)
+        else:
+            try:
+                msg = await profile.librus.message(message_id, mailbox)
+            except Exception as exc:
+                LOG.warning("Błąd odczytu wiadomości: %s", type(exc).__name__)
+                raise error(502, "Nie udało się pobrać treści wiadomości")
+            if msg is None:
+                raise error(404, "Nie znaleziono wiadomości")
+            result = {"id": val(msg, "id"), "subject": val(msg, "topic"),
+                      "sender": val(msg, "sender_name"), "date": val(msg, "send_date"),
+                      "body": val(msg, "content"), "attachments": [val(a, "filename") for a in val(msg, "attachments", [])]}
+        if not result:
             raise error(404, "Nie znaleziono wiadomości")
-        result = {"id": val(msg, "id"), "subject": val(msg, "topic"),
-                  "sender": val(msg, "sender_name"), "date": val(msg, "send_date"),
-                  "body": val(msg, "content"), "attachments": [val(a, "filename") for a in val(msg, "attachments", [])]}
-    if not result:
-        raise error(404, "Nie znaleziono wiadomości")
-    session.cache.pop(f"messages::{mailbox}", None)
-    return result
+        profile.cache.pop(f"messages::{mailbox}", None)
+        return result
 
 
 

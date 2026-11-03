@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const labels = { dashboard:'Pulpit', timetable:'Plan lekcji', grades:'Oceny', attendance:'Frekwencja', agenda:'Terminarz', homework:'Zadania domowe', messages:'Wiadomości', notes:'Uwagi', announcements:'Ogłoszenia' };
 const today = new Date();
-const state = { user:null, page:'dashboard', week: monday(today), mailbox:'inbox', loading:0, messages:[], refresh:false };
+const state = { user:null, page:'dashboard', week: monday(today), mailbox:'inbox', loading:0, messageEpoch:0, messages:[], refresh:false, profileFormMode:'add' };
 const plDate = new Intl.DateTimeFormat('pl-PL',{day:'numeric',month:'long',year:'numeric'});
 const plShort = new Intl.DateTimeFormat('pl-PL',{day:'numeric',month:'short'});
 const weekday = new Intl.DateTimeFormat('pl-PL',{weekday:'short'});
@@ -24,7 +24,7 @@ async function request(path, init={}) {
   const res=await fetch(path,{credentials:'same-origin', cache:'no-store',...init});
   let payload;
   try { payload=await res.json(); } catch { payload={detail:'Nieprawidłowa odpowiedź serwera.'}; }
-  if(!res.ok) { if(res.status===401 && !path.includes('/api/login')) showAuth(); throw new Error(payload.detail || `Błąd ${res.status}`); }
+  if(!res.ok) { if(res.status===401 && !['/api/login','/api/profiles/add'].some(p=>path.startsWith(p))) showAuth(); throw new Error(payload.detail || `Błąd ${res.status}`); }
   return payload;
 }
 async function section(name, params={}) {
@@ -38,14 +38,68 @@ function statusToast(message) {
   const toast=$('toast'); toast.textContent=message; toast.classList.remove('hidden');
   clearTimeout(statusToast.timer); statusToast.timer=setTimeout(()=>toast.classList.add('hidden'),3600);
 }
-function showAuth() { state.user=null; $('auth').classList.remove('hidden'); $('workspace').classList.add('hidden'); $('password').value=''; }
+function closeProfileMenu() { $('profile-menu').classList.add('hidden'); $('profile-trigger').setAttribute('aria-expanded','false'); }
+function closeProfileDialog() {
+  $('profile-dialog').classList.add('hidden');
+  $('profile-form').reset();
+  $('profile-error').textContent='';
+}
+function closeProfileOverlay() { closeProfileMenu(); closeProfileDialog(); }
+function renderProfileMenu() {
+  const profiles=state.user?.profiles||[];
+  const activeId=state.user?.active_profile_id;
+  $('active-profile-name').textContent=state.user?.name||'Profil';
+  $('profile-options').innerHTML=profiles.map(p=>`<div class="profile-option-row"><button type="button" class="profile-option ${p.id===activeId?'active':''}" data-profile-switch="${esc(p.id)}" aria-current="${p.id===activeId?'true':'false'}"><span class="profile-avatar">${esc((p.name||'U').slice(0,1).toUpperCase())}</span><span class="profile-option-label">${esc(p.name)}</span>${p.id===activeId?'<small>Aktywny ✓</small>':''}</button>${profiles.length>1?`<button type="button" class="profile-remove" data-profile-remove="${esc(p.id)}" title="Usuń sesję profilu">Usuń</button>`:''}</div>`).join('');
+  $('add-profile-btn').disabled=profiles.length>=2||state.user?.mode==='demo';
+  $('add-profile-btn').textContent=profiles.length>=2?'✓ Dwa profile dodane':state.user?.mode==='demo'?'Niedostępne w trybie demo':'＋ Dodaj drugie konto';
+  $('rename-profile-btn').disabled=!activeId;
+}
+function showAuth() {
+  ++state.loading; ++state.messageEpoch; state.messages=[]; state.user=null;
+  closeProfileOverlay(); closeDialog();
+  $('auth').classList.remove('hidden'); $('workspace').classList.add('hidden'); $('password').value='';
+}
 function showApp(user) {
-  $('password').value='';
-  state.user=user; $('auth').classList.add('hidden'); $('workspace').classList.remove('hidden');
+  ++state.loading; ++state.messageEpoch; state.messages=[];
+  closeDialog(); closeProfileOverlay(); $('password').value='';
+  state.user=user; state.mailbox='inbox'; state.week=monday(new Date());
+  $('auth').classList.add('hidden'); $('workspace').classList.remove('hidden');
   $('demo-banner').classList.toggle('hidden', user.mode!=='demo'); $('mode-footer').textContent=user.mode==='demo'?'DEMO':'SYNERGIA ONLINE';
   $('avatar').textContent=(user.name||'U').split(/\s+/).map(n=>n[0]).slice(0,2).join('').toUpperCase();
   $('today-label').textContent=plDate.format(today);
+  renderProfileMenu();
   navigate('dashboard');
+}
+function openProfileForm(mode) {
+  state.profileFormMode=mode;
+  closeProfileMenu();
+  $('profile-form').reset(); $('profile-error').textContent='';
+  const renaming=mode==='rename';
+  $('profile-dialog-title').textContent=renaming?'Zmień nazwę profilu':'Dodaj drugie konto Synergia';
+  $('profile-dialog-info').textContent=renaming?'Nazwa służy tylko do wyświetlania profilu w aplikacji.':'Zaloguj drugie konto Synergia. Dane obu córek pozostają oddzielne. Hasła nie zapisujemy na dysku ani w przeglądarce.';
+  $('profile-credentials').classList.toggle('hidden',renaming);
+  $('profile-login').required=!renaming; $('profile-password').required=!renaming;
+  $('profile-label').value=renaming?state.user?.name||'':'';
+  $('profile-submit').textContent=renaming?'Zapisz nazwę':'Dodaj i przełącz profil';
+  $('profile-dialog').classList.remove('hidden'); $('profile-label').focus();
+}
+async function switchProfile(id) {
+  if(!state.user||!id||id===state.user.active_profile_id){closeProfileMenu();return;}
+  closeProfileMenu(); ++state.loading; ++state.messageEpoch; closeDialog();
+  $('content').innerHTML='<div class="loading">Przełączanie profilu…</div>';
+  try {
+    const user=await request('/api/profiles/switch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile_id:id})});
+    showApp(user); statusToast('Aktywny profil: '+user.name);
+  } catch(e) {statusToast(errDetail(e)); if(state.user)navigate(state.page);}
+}
+async function removeProfile(id) {
+  const profile=state.user?.profiles?.find(p=>p.id===id);
+  if(!profile||!window.confirm('Usunąć profil „'+profile.name+'” z bieżącej sesji? Można dodać go ponownie po zalogowaniu.'))return;
+  closeProfileMenu(); ++state.loading; ++state.messageEpoch; closeDialog();
+  try {
+    const user=await request('/api/profiles/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile_id:id})});
+    showApp(user); statusToast('Profil został usunięty z tej sesji.');
+  } catch(e){statusToast(errDetail(e)); if(state.user)navigate(state.page);}
 }
 async function logout() { try {await request('/api/logout',{method:'POST'});} catch {} showAuth(); }
 function closeSidebar() { $('sidebar').classList.remove('open'); $('sidebar-mask').classList.add('hidden'); }
@@ -138,21 +192,47 @@ function renderAnnouncements(d) {
 }
 async function openMessage(i) {
   const msg=state.messages[i]; if(!msg) return;
+  const epoch=state.messageEpoch;
   $('message-dialog').classList.remove('hidden'); $('dialog-body').innerHTML='<div class="loading">Otwieranie wiadomości…</div>';
   try {
     const data=await request('/api/message/'+encodeURIComponent(msg.id)+'?mailbox='+encodeURIComponent(state.mailbox));
+    if(epoch!==state.messageEpoch)return;
     $('dialog-body').innerHTML=`<h2 id="dialog-title">${esc(data.subject||'Bez tematu')}</h2><small>Od: ${esc(data.sender||'—')} · ${dateLabel(data.date)}</small><div class="body-content"><p>${esc(data.body||'Brak treści.')}</p></div>${data.attachments?.length?`<small>Załączniki: ${data.attachments.map(esc).join(', ')} (pobieranie w kolejnej wersji)</small>`:''}`;
-  } catch(e) { $('dialog-body').innerHTML=`<div class="error-box">${esc(errDetail(e))}</div>`; }
+  } catch(e) { if(epoch===state.messageEpoch) $('dialog-body').innerHTML=`<div class="error-box">${esc(errDetail(e))}</div>`; }
 }
 function closeDialog() { $('message-dialog').classList.add('hidden'); }
 function initEvents() {
   $('login-form').addEventListener('submit', async (e)=>{
     e.preventDefault(); $('login-error').textContent=''; const btn=$('login-btn'); btn.disabled=true; btn.textContent='Łączenie…';
-    try { const user=await request('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login:$('login').value,password:$('password').value})}); showApp(user); }
+    try { const user=await request('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login:$('login').value,password:$('password').value,label:$('login-label').value})}); showApp(user); }
     catch(ex) { $('login-error').textContent=errDetail(ex); }
     finally { btn.disabled=false; btn.innerHTML='Zaloguj się <span>→</span>'; }
   });
   $('demo-btn').addEventListener('click',async()=>{ $('demo-btn').disabled=true; try {showApp(await request('/api/demo',{method:'POST'}));} catch(e) { $('login-error').textContent=errDetail(e); } finally{$('demo-btn').disabled=false;} });
+  $('profile-trigger').addEventListener('click',()=>{
+    if(!state.user)return;
+    const open=$('profile-menu').classList.contains('hidden');
+    $('profile-menu').classList.toggle('hidden',!open);
+    $('profile-trigger').setAttribute('aria-expanded',String(open));
+  });
+  $('add-profile-btn').addEventListener('click',()=>{if(state.user?.mode!=='demo'&&(state.user?.profiles||[]).length<2)openProfileForm('add');});
+  $('rename-profile-btn').addEventListener('click',()=>{if(state.user)openProfileForm('rename');});
+  $('profile-dialog-close').addEventListener('click',closeProfileDialog);
+  $('profile-dialog').addEventListener('click',e=>{if(e.target===$('profile-dialog'))closeProfileDialog();});
+  $('profile-form').addEventListener('submit', async e=>{
+    e.preventDefault(); $('profile-error').textContent='';
+    const btn=$('profile-submit');btn.disabled=true;
+    const renaming=state.profileFormMode==='rename';
+    btn.textContent=renaming?'Zapisywanie…':'Łączenie z drugim kontem…';
+    try {
+      const path=renaming?'/api/profiles/rename':'/api/profiles/add';
+      const body=renaming?{profile_id:state.user.active_profile_id,label:$('profile-label').value}:
+        {label:$('profile-label').value,login:$('profile-login').value,password:$('profile-password').value};
+      const user=await request(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      showApp(user);statusToast(renaming?'Zmieniono nazwę profilu.':'Dodano drugie konto. Możesz przełączać profile.');
+    }catch(ex){$('profile-error').textContent=errDetail(ex);}
+    finally{btn.disabled=false;btn.textContent=renaming?'Zapisz nazwę':'Dodaj i przełącz profil';}
+  });
   $('password-toggle').addEventListener('click',()=>{const p=$('password'); p.type=p.type==='password'?'text':'password';$('password-toggle').textContent=p.type==='password'?'Pokaż':'Ukryj';});
   $('logout').addEventListener('click',logout); $('leave-demo').addEventListener('click',logout);
   $('refresh').addEventListener('click',async()=>{state.refresh=true; if(await navigate(state.page)) statusToast('Dane zostały odświeżone.');});
@@ -160,8 +240,11 @@ function initEvents() {
   $('sidebar-mask').addEventListener('click',closeSidebar);
   $('dialog-close').addEventListener('click',closeDialog);
   $('message-dialog').addEventListener('click',e=>{if(e.target===$('message-dialog'))closeDialog();});
-  window.addEventListener('keydown',e=>{if(e.key==='Escape')closeDialog();});
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDialog();closeProfileOverlay();}});
   document.addEventListener('click',e=>{
+    const profileButton=e.target.closest('button[data-profile-switch],button[data-profile-remove]');
+    if(profileButton){if(profileButton.dataset.profileSwitch)switchProfile(profileButton.dataset.profileSwitch);else removeProfile(profileButton.dataset.profileRemove);return;}
+    if(!e.target.closest('#profile-control'))closeProfileMenu();
     const btn=e.target.closest('button[data-page],button[data-action]'); if(!btn) return;
     if(btn.dataset.page) { navigate(btn.dataset.page); return; }
     const action=btn.dataset.action;
