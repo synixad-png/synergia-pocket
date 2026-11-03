@@ -16,6 +16,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
+from session_store import configured_store
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -23,18 +24,22 @@ from demo import demo_section, demo_message
 
 BASE = Path(__file__).parent
 LOG = logging.getLogger("synergia_pocket")
+STORE = configured_store()
+RESTORE_LOCK = asyncio.Lock()
 @asynccontextmanager
 async def lifespan(_app):
     yield
     for token in list(SESSIONS):
         session = SESSIONS.pop(token)
         await close_session_clients(session)
+    if STORE is not None:
+        await STORE.close()
 
 
 app = FastAPI(title="Synergia Pocket", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 SECTIONS = {"grades", "timetable", "attendance", "agenda", "homework", "messages", "notes", "announcements"}
-SESSION_IDLE = 60 * 60
+SESSION_IDLE = 7 * 24 * 60 * 60  # 7 dni, odnawiane podczas aktywnego korzystania
 CACHE_SECONDS = 180
 MAX_PROFILES = 2
 # Ustaw SYNERGIA_FORCE_HTTPS=1 na hostingu za terminatorem TLS.
@@ -67,6 +72,7 @@ class Profile:
     mode: str
     librus: Any = None
     login_fingerprint: str | None = None
+    username: str | None = None  # wyłącznie dla bezhasłowego wznowienia sesji
     cache: dict[str, tuple[float, dict[str, Any]]] = field(default_factory=dict)
 
 
@@ -147,9 +153,10 @@ async def close_session_clients(session: Session) -> None:
         session.active_profile_id = ""
 
 
-def make_profile(mode: str, name: str, librus: Any = None, fingerprint: str | None = None) -> Profile:
+def make_profile(mode: str, name: str, librus: Any = None,
+                 fingerprint: str | None = None, username: str | None = None) -> Profile:
     return Profile(id=secrets.token_urlsafe(16), name=clean_label(name, "Uczeń"),
-                   mode=mode, librus=librus, login_fingerprint=fingerprint)
+                   mode=mode, librus=librus, login_fingerprint=fingerprint, username=username)
 
 
 def error(status: int, message: str) -> HTTPException:
@@ -168,6 +175,110 @@ def require_origin(request: Request) -> None:
             raise error(403, "Nieprawidłowe pochodzenie żądania.")
 
 
+
+def session_snapshot(session: Session) -> dict[str, Any] | None:
+    """Serwerowy zapis *aktywnych* ciasteczek API (nigdy haseł, nigdy demo)."""
+    if not session.profiles or any(p.mode != "live" or not p.username for p in session.profiles.values()):
+        return None
+    profiles = []
+    for p in session.profiles.values():
+        data = getattr(p.librus, "session_data", None)
+        if data is None or not getattr(data, "cookies", None):
+            return None
+        profiles.append({
+            "id": p.id, "name": p.name, "mode": p.mode,
+            "username": p.username, "login_fingerprint": p.login_fingerprint,
+            "session_data": {"cookies": data.cookies, "logged_in_at": data.logged_in_at},
+        })
+    return {"version": 1, "profiles": profiles, "active_profile_id": session.active_profile_id}
+
+
+def restored_session(record: dict[str, Any]) -> Session | None:
+    """Odtwarza wyłącznie ciasteczka Librusa; hasło pozostaje puste."""
+    from librus_synergia import Librus, LibrusSessionData
+    entries = record.get("profiles")
+    if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_PROFILES:
+        return None
+    restored = Session()
+    for item in entries:
+        if not isinstance(item, dict) or item.get("mode") != "live":
+            return None
+        username = item.get("username")
+        profile_id = item.get("id")
+        data = item.get("session_data")
+        if (not isinstance(username, str) or not username or len(username) > 128
+                or not isinstance(profile_id, str) or not 1 <= len(profile_id) <= 80
+                or not isinstance(data, dict) or not isinstance(data.get("cookies"), list)
+                or not isinstance(data.get("logged_in_at"), (int, float))
+                or not data["cookies"] or profile_id in restored.profiles):
+            return None
+        client = Librus(username, "", session_data=LibrusSessionData(
+            cookies=data["cookies"], logged_in_at=data["logged_in_at"]),
+            cache_reference_data=True, max_concurrent_requests=3)
+        restored.profiles[profile_id] = Profile(
+            id=profile_id, name=clean_label(item.get("name"), "Uczeń"),
+            mode="live", librus=client, username=username,
+            login_fingerprint=login_fingerprint(username))
+    active = record.get("active_profile_id")
+    if active not in restored.profiles:
+        return None
+    restored.active_profile_id = active
+    return restored
+
+
+async def save_session(token: str, session: Session) -> None:
+    if STORE is None:
+        return
+    record = session_snapshot(session)
+    if record is None:
+        return
+    try:
+        await STORE.save(token, record, SESSION_IDLE)
+    except Exception as exc:
+        LOG.warning("Nie udało się zapisać sesji: %s", type(exc).__name__)
+
+
+async def delete_saved_session(token: str) -> None:
+    if STORE is None or not token:
+        return
+    try:
+        await STORE.delete(token)
+    except Exception as exc:
+        LOG.warning("Nie udało się usunąć zapisu sesji: %s", type(exc).__name__)
+
+
+async def restore_cookie_session(token: str) -> Session | None:
+    if STORE is None or not token:
+        return None
+    async with RESTORE_LOCK:
+        if token in SESSIONS:
+            return SESSIONS[token]
+        try:
+            record = await STORE.get(token)
+        except Exception as exc:
+            LOG.warning("Błąd magazynu sesji: %s", type(exc).__name__)
+            raise error(503, "Magazyn sesji chwilowo niedostępny.")
+        if record is None:
+            return None
+        session = restored_session(record)
+        if session is None:
+            await delete_saved_session(token)
+            return None
+        # Nie pokazujemy danych profilu, dopóki Librus nie potwierdzi sesji.
+        try:
+            await session.active.librus.me()
+        except Exception as exc:
+            await close_session_clients(session)
+            from librus_synergia.exceptions import LibrusAuthError
+            if isinstance(exc, LibrusAuthError):
+                await delete_saved_session(token)
+                return None
+            LOG.warning("Nie udało się zweryfikować wznawianej sesji: %s", type(exc).__name__)
+            raise error(503, "Nie można teraz potwierdzić sesji w Synergii.")
+        SESSIONS[token] = session
+        return session
+
+
 async def prune_sessions() -> None:
     now = time.monotonic()
     stale = [token for token, session in list(SESSIONS.items()) if now - session.last_seen > SESSION_IDLE]
@@ -175,16 +286,20 @@ async def prune_sessions() -> None:
         session = SESSIONS.pop(token, None)
         if session:
             await close_session_clients(session)
+            await delete_saved_session(token)
 
 
 async def get_session(request: Request) -> Session:
     token = request.cookies.get("synergia_session", "")
     session = SESSIONS.get(token)
     if session is None:
+        session = await restore_cookie_session(token)
+    if session is None:
         raise error(401, "Sesja wygasła. Zaloguj się ponownie.")
     if time.monotonic() - session.last_seen > SESSION_IDLE:
         SESSIONS.pop(token, None)
         await close_session_clients(session)
+        await delete_saved_session(token)
         raise error(401, "Sesja wygasła. Zaloguj się ponownie.")
     session.last_seen = time.monotonic()
     return session
@@ -201,10 +316,11 @@ def set_cookie(response: JSONResponse, token: str, request: Request) -> None:
                         samesite="strict", max_age=SESSION_IDLE, path="/")
 
 
-def new_session(mode: str, name: str, librus: Any = None) -> tuple[str, Session]:
+def new_session(mode: str, name: str, librus: Any = None,
+                username: str | None = None) -> tuple[str, Session]:
     token = secrets.token_urlsafe(32)
     session = Session()
-    profile = make_profile(mode, name, librus)
+    profile = make_profile(mode, name, librus, username=username)
     session.profiles[profile.id] = profile
     session.active_profile_id = profile.id
     SESSIONS[token] = session
@@ -225,6 +341,13 @@ async def safety_headers(request: Request, call_next):
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
         "connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'"
     )
+    token = request.cookies.get("synergia_session", "")
+    session = SESSIONS.get(token)
+    if request.url.path.startswith("/api/") and response.status_code < 400 and session is not None:
+        # Sliding cookie: także po odświeżeniu strony, bez dotykania haseł.
+        if time.monotonic() - session.last_seen < SESSION_IDLE:
+            set_cookie(response, token, request)
+            await save_session(token, session)
     return response
 
 
@@ -241,14 +364,24 @@ async def index():
 @app.get("/api/session")
 async def session_info(request: Request):
     token = request.cookies.get("synergia_session", "")
-    session = SESSIONS.get(token)
-    if not session:
-        return {"authenticated": False}
-    if time.monotonic() - session.last_seen > SESSION_IDLE:
-        SESSIONS.pop(token, None)
-        await close_session_clients(session)
-        return {"authenticated": False}
-    session.last_seen = time.monotonic()
+    try:
+        session = await get_session(request)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return {"authenticated": False}
+        raise
+    # Biblioteka sama odświeża ciasteczko oauth_token, gdy jest to potrzebne.
+    async with session.lock:
+        login = getattr(session.active.librus, "login", None) if session.mode == "live" else None
+        if callable(login):
+            try:
+                await login()
+            except Exception as exc:
+                from librus_synergia.exceptions import LibrusAuthError
+                if isinstance(exc, LibrusAuthError):
+                    return {"authenticated": False}
+                LOG.warning("Błąd odnawiania sesji przy otwarciu: %s", type(exc).__name__)
+                # Nie niszczymy ważnego widoku przy chwilowej awarii połączenia.
     return profile_payload(session)
 
 
@@ -260,6 +393,7 @@ async def start_demo(request: Request):
     old = SESSIONS.pop(old_token, None)
     if old:
         await close_session_clients(old)
+    await delete_saved_session(old_token)
     token, session = new_session("demo", "Aleksandra Nowak")
     response = JSONResponse(profile_payload(session))
     set_cookie(response, token, request)
@@ -303,10 +437,12 @@ async def login(body: LoginBody, request: Request):
     old = SESSIONS.pop(old_token, None)
     if old:
         await close_session_clients(old)
-    token, session = new_session("live", clean_label(body.label, name), client)
+    await delete_saved_session(old_token)
+    token, session = new_session("live", clean_label(body.label, name), client, username=body.login.strip())
     session.active.login_fingerprint = login_fingerprint(body.login)
     response = JSONResponse(profile_payload(session))
     set_cookie(response, token, request)
+    await save_session(token, session)
     return response
 
 
@@ -330,7 +466,8 @@ async def add_profile(body: LoginBody, request: Request):
             raise error(409, "To konto jest już dodane.")
         throttle_login(body.login)
         client, name = await connect_librus(body.login, body.password)
-        profile = make_profile("live", clean_label(body.label, name), client, fingerprint)
+        profile = make_profile("live", clean_label(body.label, name), client, fingerprint,
+                               username=body.login.strip())
         session.profiles[profile.id] = profile
         session.active_profile_id = profile.id
         return profile_payload(session)
@@ -391,6 +528,7 @@ async def logout(request: Request):
     session = SESSIONS.pop(token, None)
     if session:
         await close_session_clients(session)
+    await delete_saved_session(token)
     response = JSONResponse({"ok": True})
     response.delete_cookie("synergia_session", path="/")
     return response
