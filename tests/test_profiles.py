@@ -69,7 +69,10 @@ def test_profile_flow_isolation_and_cleanup(fake_librus):
         b=two.json()['active_profile_id']; assert b!=a
         assert two.json()['name']=='Martyna'
         assert len(two.json()['profiles'])==2
-        assert not two.headers.get('set-cookie') # Cookie nie jest wymieniane przy przełączeniu
+        # Po dodaniu drugiego profilu sesja jest odnawiana, ale jej token się nie zmienia.
+        assert two.headers.get('set-cookie')
+        assert 'max-age=604800' in two.headers['set-cookie'].lower()
+        assert one.cookies.get('synergia_session') == two.cookies.get('synergia_session')
         assert c.get('/api/section/grades').json()['subjects'][0]['grades'][0]['value']=='2'
         assert c.get('/api/message/msg-ania').status_code==404
         assert c.get('/api/message/msg-ola').json()['body']=='Sekret dla ola'
