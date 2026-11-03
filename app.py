@@ -31,10 +31,20 @@ async def lifespan(_app):
     if STORE is not None:
         try:
             await STORE.redis.ping()
+            # Test zapisu i odczytu danych syntetycznych (bez haseł i danych dzieci).
+            probe = secrets.token_urlsafe(18)
+            probe_key = "synergia:pocket:probe:" + secrets.token_hex(12)
+            await STORE.redis.set(probe_key, probe.encode("ascii"), ex=30)
+            try:
+                written = await STORE.redis.get(probe_key)
+                if written != probe.encode("ascii"):
+                    raise RuntimeError("Redis read/write mismatch")
+            finally:
+                await STORE.redis.delete(probe_key)
         except Exception as exc:
             LOG.error("Magazyn sesji Redis niedostępny: %s", type(exc).__name__)
         else:
-            LOG.info("Magazyn sesji Redis: połączenie OK")
+            print("INFO: Magazyn sesji Redis: PING i zapis/odczyt OK", flush=True)
     yield
     for token in list(SESSIONS):
         session = SESSIONS.pop(token)
