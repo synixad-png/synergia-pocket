@@ -3,6 +3,7 @@ name: Tests — Synergia Pocket
 on:
   push:
     branches:
+      - main
       - feature/session-continuity-no-phone-vault
   pull_request:
     branches:
