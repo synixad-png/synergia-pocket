@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from typing import Any
+from urllib.parse import urlsplit
 
 from cryptography.fernet import Fernet, InvalidToken
 from redis.asyncio import Redis
@@ -60,7 +61,22 @@ def configured_store() -> RedisSessionStore | None:
         raise RuntimeError(
             "Trwałe sesje wymagają obu sekretów: SYNERGIA_REDIS_URL i SYNERGIA_SESSION_FERNET_KEY."
         )
-    # Wymuszamy TLS do zewnętrznego magazynu; bez lokalnych wyjątków.
-    if not url.startswith("rediss://"):
-        raise RuntimeError("SYNERGIA_REDIS_URL musi używać rediss:// (TLS).")
+    parsed = urlsplit(url)
+    private_render = (
+        parsed.scheme == "redis"
+        and parsed.hostname is not None
+        and parsed.hostname.startswith("red-")
+        and parsed.hostname[4:].isalnum()
+        and parsed.port == 6379
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.path in ("", "/")
+        and not parsed.query
+        and not parsed.fragment
+        # Używamy niezabezpieczonego TLS-em transportu wyłącznie na
+        # prywatnej sieci Render. Zawartość sesji i tak jest szyfrowana Fernet.
+        and os.getenv("RENDER", "") == "true"
+    )
+    if parsed.scheme != "rediss" and not private_render:
+        raise RuntimeError("Redis wymaga rediss:// lub prywatnej sieci Render redis://red-*:6379.")
     return RedisSessionStore(Redis.from_url(url, decode_responses=False), key)
