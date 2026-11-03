@@ -710,6 +710,9 @@ async def get_section(section: str, request: Request, week: str | None = None, m
         except HTTPException:
             raise
         except Exception as exc:
+            from librus_synergia.exceptions import LibrusAuthError
+            if isinstance(exc, LibrusAuthError):
+                raise error(401, "Librus wymaga ponownego logowania do tego profilu.")
             LOG.warning("Błąd pobierania %s: %s", section, type(exc).__name__)
             raise error(502, f"Nie udało się pobrać sekcji {section} z Synergii ({type(exc).__name__}).")
         profile.cache[key] = (time.monotonic(), result)
@@ -730,6 +733,9 @@ async def get_message(message_id: str, request: Request, mailbox: str = "inbox")
             try:
                 msg = await profile.librus.message(message_id, mailbox)
             except Exception as exc:
+                from librus_synergia.exceptions import LibrusAuthError
+                if isinstance(exc, LibrusAuthError):
+                    raise error(401, "Librus wymaga ponownego logowania do tego profilu.")
                 LOG.warning("Błąd odczytu wiadomości: %s", type(exc).__name__)
                 raise error(502, "Nie udało się pobrać treści wiadomości")
             if msg is None:
