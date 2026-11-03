@@ -68,10 +68,10 @@ Nie wprowadzono sejfu na telefonie ani zapisu haseł. Pozostają dotychczasowe e
 
 ### Uruchomienie opcji Redis (po osobnej konfiguracji serwera)
 
-1. Utwórz **prywatny** zewnętrzny Redis z TLS (adres zaczynający się od `rediss://`). Wybierz dostawcę z trwałym magazynem i odpowiednimi warunkami prywatności; pamiętaj, że zewnętrzny serwer przetwarza informacje o kontach uczniów.
+1. Przygotuj Redis: zewnętrzny serwer z TLS (`rediss://`) albo prywatny Render Key Value w tym samym regionie (`redis://red-...:6379`). Ten drugi działa tylko wewnątrz platformy Render. Przed użyciem oceń warunki przetwarzania danych kont uczniów. **Bezpłatny Render Key Value nie zapisuje danych na dysku, dlatego własny restart tego magazynu nadal może spowodować utratę sesji.**
 2. W sekretach środowiskowych usługi Render ustaw `SYNERGIA_REDIS_URL` na adres połączenia, a `SYNERGIA_SESSION_FERNET_KEY` na osobny stały klucz utworzony lokalnie:
    `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-3. **Nie publikuj klucza ani URL Redis** w GitHubie, ChatGPT czy w kodzie. Nie zmieniaj klucza podczas zwykłych wdrożeń, bo utracisz możliwość odczytu zapisanych sesji.
+3. **Nie publikuj klucza ani URL Redis** w GitHubie, wiadomościach i kodzie. Nie zmieniaj klucza podczas zwykłych wdrożeń, bo utracisz możliwość odczytu zapisanych sesji.
 4. Po wdrożeniu zaloguj oba konta ponownie jeden raz. Przy restarcie serwera aplikacja spróbuje wznowić sesje tylko wtedy, gdy Librus nadal je honoruje.
 
 To nie jest produkcyjny audyt bezpieczeństwa ani potwierdzenie logowania z prawdziwymi kontami. Przed użyciem osobnego dostawcy Redis należy ocenić jego zgodność z wymaganiami ochrony danych i zasadami Librusa.
@@ -79,3 +79,7 @@ To nie jest produkcyjny audyt bezpieczeństwa ani potwierdzenie logowania z praw
 ### Testy
 
 `python -m pytest -q` obejmuje testy mock dwóch kont, bez prawdziwych danych, a dodatkowo szyfrowania w Redis, wznowienia po usunięciu RAM, wygaszenia, wylogowania i zachowania bez Redis.
+
+### Wdrożenie 03.11.2026
+
+Instancja darmowego Render Key Value `synergia-pocket-sessions` została utworzona w regionie Frankfurt oraz podłączona do web service `synergia-pocket` przez zmienne środowiskowe hostingu. Sekrety nie są zapisywane w repozytorium. Free Key Value przechowuje stan wyłącznie w pamięci; restart samego Redis oznacza utratę zapisanych sesji. Sprawdzaj w logach startowych komunikat `Magazyn sesji Redis: PING i zapis/odczyt OK`. Bez sprawdzenia prawdziwego konta Librusa nie wolno uznawać 100% bezobsługowego wznawiania logowania za potwierdzone.
