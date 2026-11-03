@@ -109,6 +109,18 @@ def test_config_requires_tls_and_both_env_variables(monkeypatch):
     monkeypatch.setenv("SYNERGIA_SESSION_FERNET_KEY", Fernet.generate_key().decode())
     with pytest.raises(RuntimeError):
         configured_store()
+    monkeypatch.setenv("SYNERGIA_REDIS_URL", "redis://red-verified123:6379")
+    monkeypatch.delenv("RENDER", raising=False)
+    with pytest.raises(RuntimeError):
+        configured_store()
+    monkeypatch.setenv("RENDER", "true")
+    store = configured_store()
+    assert store is not None
+    import asyncio
+    asyncio.run(store.close())
+    monkeypatch.setenv("SYNERGIA_REDIS_URL", "redis://example.com:6379")
+    with pytest.raises(RuntimeError):
+        configured_store()
 
 
 def test_two_profiles_survive_backend_restart_without_saved_password(monkeypatch):
