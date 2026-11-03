@@ -177,3 +177,23 @@ def test_session_idle_rejected_and_persistent_record_deleted(monkeypatch):
         assert token not in module.SESSIONS
         assert not db.data
     module.SESSIONS.clear()
+
+def test_real_librus_session_import_export_without_network():
+    """Weryfikuje kontrakt prawdziwej biblioteki 0.3.30, bez kontaktu z Librusem."""
+    import asyncio
+    from librus_synergia import Librus, LibrusSessionData
+    async def check():
+        initial = LibrusSessionData(
+            cookies=[{"name": "oauth_token", "value": "totally-fake-test-cookie",
+                      "domain": "synergia.librus.pl"}],
+            logged_in_at=time.time())
+        client = Librus("dummy-login", "", session_data=initial)
+        try:
+            assert client.session_data.logged_in_at == initial.logged_in_at
+            assert client.client.is_session_valid()
+            exported = client.session_data
+            assert any(c["name"] == "oauth_token"
+                       and c["value"] == "totally-fake-test-cookie" for c in exported.cookies)
+        finally:
+            await client.close()
+    asyncio.run(check())
