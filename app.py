@@ -28,6 +28,13 @@ STORE = configured_store()
 RESTORE_LOCK = asyncio.Lock()
 @asynccontextmanager
 async def lifespan(_app):
+    if STORE is not None:
+        try:
+            await STORE.redis.ping()
+        except Exception as exc:
+            LOG.error("Magazyn sesji Redis niedostępny: %s", type(exc).__name__)
+        else:
+            LOG.info("Magazyn sesji Redis: połączenie OK")
     yield
     for token in list(SESSIONS):
         session = SESSIONS.pop(token)
