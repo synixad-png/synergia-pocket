@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#17274b">
+  <meta name="description" content="Synergia Pocket — niezależny dziennik szkolny w przeglądarce.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <title>Synergia Pocket — Twój szkolny dzień</title>
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <section id="auth" class="auth-screen">
+    <div class="auth-backdrop orb-one"></div><div class="auth-backdrop orb-two"></div>
+    <div class="auth-card">
+      <div class="auth-intro">
+        <div class="brand brand-light"><div class="brand-icon">S<span>●</span></div><div><strong>synergia<span>pocket</span></strong><small>Twój szkolny dzień. Prościej.</small></div></div>
+        <span class="eyebrow eyebrow-light">TWOJA SZKOŁA. TWÓJ RYTM.</span>
+        <h1>Wszystko o szkole.<br><em>W jednym miejscu.</em></h1>
+        <p>Oceny, plan lekcji, zadania i wiadomości. Przejrzysty panel dla ucznia i rodzica.</p>
+        <div class="auth-highlights"><span>◈ Plan lekcji</span><span>✦ Oceny</span><span>◉ Wiadomości</span></div>
+      </div>
+      <div class="auth-form-pane">
+        <div class="pill pill-soft">Niezależna aplikacja</div>
+        <h2>Witaj ponownie 👋</h2>
+        <p>Zaloguj się danymi do <strong>Synergia</strong> (nie Konta LIBRUS).</p>
+        <form id="login-form" autocomplete="on">
+          <label for="login">Login Synergia</label>
+          <input id="login" name="username" autocomplete="username" placeholder="np. 1234567u" required maxlength="128">
+          <label for="password">Hasło</label>
+          <div class="password-wrap"><input id="password" name="password" autocomplete="current-password" type="password" placeholder="Twoje hasło" required maxlength="256"><button type="button" id="password-toggle" aria-label="Pokaż hasło">Pokaż</button></div>
+          <p id="login-error" class="form-error" aria-live="polite"></p>
+          <button id="login-btn" class="button button-primary button-wide" type="submit">Zaloguj się <span>→</span></button>
+        </form>
+        <div class="divider-word"><span>lub</span></div>
+        <button id="demo-btn" class="button button-outline button-wide" type="button">✧ Uruchom wersję demonstracyjną</button>
+        <div class="auth-disclaimer">Tryb demo zawiera wyłącznie fikcyjne dane. Logowanie do Synergii wymaga wdrożonego serwera HTTPS. Korzystasz z nieoficjalnego API — nie jest to produkt Librusa. Nie loguj się na nieznanej stronie.</div>
+      </div>
+    </div>
+    <div class="auth-footer">SYNERGIA POCKET · NIE JEST PRODUKTEM FIRMY LIBRUS</div>
+  </section>
+
+  <div id="workspace" class="workspace hidden">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><div class="brand-icon">S<span>●</span></div><div><strong>synergia<span>pocket</span></strong><small>Twoja szkolna przestrzeń</small></div></div>
+      <div class="sidebar-section-label">MENU GŁÓWNE</div>
+      <nav id="main-nav" aria-label="Nawigacja">
+        <button data-page="dashboard" class="nav-link active"><span class="nav-glyph">⌂</span> Pulpit <span class="nav-arrow">›</span></button>
+        <button data-page="timetable" class="nav-link"><span class="nav-glyph">▦</span> Plan lekcji</button>
+        <button data-page="grades" class="nav-link"><span class="nav-glyph">✦</span> Oceny</button>
+        <button data-page="attendance" class="nav-link"><span class="nav-glyph">◴</span> Frekwencja</button>
+        <button data-page="agenda" class="nav-link"><span class="nav-glyph">▣</span> Terminarz</button>
+        <button data-page="homework" class="nav-link"><span class="nav-glyph">✎</span> Zadania domowe</button>
+        <button data-page="messages" class="nav-link"><span class="nav-glyph">✉</span> Wiadomości</button>
+        <button data-page="notes" class="nav-link"><span class="nav-glyph">◈</span> Uwagi</button>
+        <button data-page="announcements" class="nav-link"><span class="nav-glyph">◎</span> Ogłoszenia</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-tip"><span class="sidebar-tip-icon">✦</span><strong>Szkoła pod kontrolą</strong><small>Twoje najważniejsze informacje zawsze pod ręką.</small></div>
+        <button id="logout" class="logout-button">⇥ <span>Wyloguj się</span></button>
+      </div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar">
+        <button class="mobile-menu" id="menu-btn" aria-label="Otwórz menu">☰</button>
+        <div class="breadcrumb">Moja szkoła <span>/</span> <strong id="breadcrumb-name">Pulpit</strong></div>
+        <div class="top-actions">
+          <span id="today-label" class="today-label"></span>
+          <button id="refresh" class="icon-button" aria-label="Odśwież dane" title="Odśwież">↻</button>
+          <div class="avatar" id="avatar">U</div>
+        </div>
+      </header>
+      <div id="demo-banner" class="demo-banner hidden"><span>✧ TRYB DEMO</span> Wszystkie wyświetlane dane są fikcyjne. <button id="leave-demo">Zaloguj się do Synergii →</button></div>
+      <main class="content" id="content" tabindex="-1"><div class="loading">Wczytywanie…</div></main>
+      <footer class="main-footer">Synergia Pocket · Nieoficjalna aplikacja edukacyjna · Dane tylko do odczytu <span id="mode-footer"></span></footer>
+    </div>
+    <nav class="bottom-nav" aria-label="Szybka nawigacja">
+      <button data-page="dashboard" class="bottom-link active"><span>⌂</span>Start</button>
+      <button data-page="timetable" class="bottom-link"><span>▦</span>Plan</button>
+      <button data-page="grades" class="bottom-link"><span>✦</span>Oceny</button>
+      <button data-page="homework" class="bottom-link"><span>✎</span>Zadania</button>
+      <button data-page="messages" class="bottom-link"><span>✉</span>Poczta</button>
+    </nav>
+    <div id="sidebar-mask" class="sidebar-mask hidden"></div>
+  </div>
+
+  <div id="message-dialog" class="dialog-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <div class="dialog"><div class="dialog-top"><span class="pill">Wiadomość</span><button id="dialog-close" class="icon-button" aria-label="Zamknij">×</button></div>
+      <div id="dialog-body"></div>
+    </div>
+  </div>
+  <div id="toast" class="toast hidden" role="status"></div>
+</body>
+</html>
