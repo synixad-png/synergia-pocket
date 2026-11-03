@@ -19,7 +19,7 @@ To jest jednorazowe opublikowanie aplikacji. Codzienne używanie nie wymaga Wind
 
 ## TRYB DEMO
 
-`SYNERGIA_POCKET_WEB_v4_DEMO.html` otwiera się jako lokalna strona HTML — bez serwera i bez logowania. Dane są fikcyjne. **Nie wpisuj tam prawdziwego hasła.**
+Aktualny podgląd `PODGLAD_MOBILNY_OFFLINE.html` znajduje się w paczce wydania i działa lokalnie bez serwera. Dane są fikcyjne. **Nie wpisuj tam prawdziwego hasła.** Starszy `SYNERGIA_POCKET_WEB_v3_DEMO.html` w repozytorium to archiwalny wygląd v3.
 
 ## ZAKŁADKI
 
