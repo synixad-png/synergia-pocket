@@ -28,3 +28,17 @@ jobs:
         run: node --check static/app.js
       - name: Unit and regression tests (mock accounts only)
         run: python -m pytest -q
+      - name: Build production Docker image and smoke test actual entrypoint
+        run: |
+          docker build --tag synergia-pocket:test .
+          docker run --detach --name synergia-smoke --publish 127.0.0.1:18080:10000 synergia-pocket:test
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/api/health | grep -q '"status":"ok"'; then
+              docker rm -f synergia-smoke
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs synergia-smoke
+          docker rm -f synergia-smoke
+          exit 1
