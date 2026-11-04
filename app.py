@@ -796,6 +796,9 @@ install_school_file_routes(app, get_session, assert_session_current)
 from message_attachments import install_message_attachment_routes
 install_message_attachment_routes(app, get_session, assert_session_current)
 
+from canteen_sp3 import install_canteen_routes
+install_canteen_routes(app, get_session, assert_session_current)
+
 from push_features import install_push_routes
 PUSH_SERVICE = install_push_routes(app, STORE, SESSIONS, restore_cookie_session,
                                    get_session, require_origin, assert_session_current)
