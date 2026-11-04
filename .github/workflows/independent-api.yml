@@ -40,10 +40,4 @@ jobs:
           fi
       - name: Package independent sources into ZIP (CRC verified)
         run: python SYNERGIA_API_INDEPENDENT/scripts/package.py
-      - name: Publish downloadable independent source ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: SYNERGIA_API_INDEPENDENT_v0_2_ZRODLA
-          path: SYNERGIA_API_INDEPENDENT_v0_2_ZRODLA.zip
-          if-no-files-found: error
-          retention-days: 30
+      # GitHub artifact quota is exhausted; code remains downloadable from the branch.
