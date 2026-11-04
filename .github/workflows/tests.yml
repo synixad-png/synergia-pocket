@@ -39,6 +39,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Check real dark/light text contrast on mobile and desktop
         run: python tests/browser_theme_check.py
+      - name: Check school document download in real Chromium (mobile and desktop)
+        run: python tests/browser_school_files_check.py
       - name: Build production Docker image and smoke test actual entrypoint
         run: |
           docker build --tag synergia-pocket:test .
