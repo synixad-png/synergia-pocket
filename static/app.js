@@ -69,6 +69,7 @@ function showApp(user) {
   $('today-label').textContent=plDate.format(today);
   renderProfileMenu();
   navigate('dashboard');
+  document.dispatchEvent(new Event('synergia:authenticated'));
 }
 function openProfileForm(mode) {
   state.profileFormMode=mode;
@@ -190,7 +191,7 @@ function renderMessages(d) {
   state.messages=d.items||[];
   const tabs=`<div class="tabs"><button data-action="inbox" class="tab ${state.mailbox==='inbox'?'active':''}">Odebrane</button><button data-action="outbox" class="tab ${state.mailbox==='outbox'?'active':''}">Wysłane</button></div>`;
   const items=state.messages.map((x,i)=>`<button class="message-row ${x.unread?'unread':''}" data-action="message" data-index="${i}"><span class="message-avatar">${esc((x.sender||x.recipient||'S').slice(0,1).toUpperCase())}</span><span class="message-row-main"><span class="message-row-top"><strong>${esc(x.sender||x.recipient||'Nadawca')}</strong><time>${dateLabel(x.date,true)}</time></span><h3>${esc(x.subject||'Bez tematu')}</h3><p>${esc(x.preview)}</p></span>${x.unread?'<span class="new-dot"></span>':''}</button>`).join('');
-  return head('Wiadomości','Odebrane i wysłane wiadomości szkolne.',tabs)+'<div class="message-toolbar"><button type="button" class="button button-primary" data-action="compose-new">✎ Napisz wiadomość</button><span>Wybierz pracownika szkoły z listy kontaktów</span></div>'+panel(state.mailbox==='inbox'?'Skrzynka odbiorcza':'Wysłane',items||empty('Brak wiadomości.'));
+  return head('Wiadomości','Odebrane i wysłane wiadomości szkolne.',tabs)+'<div class="message-toolbar"><button type="button" class="button button-primary" data-action="compose-new">✎ Napisz wiadomość</button><span>Wybierz pracownika szkoły z listy kontaktów</span></div><div class="push-panel"><div><strong>🔔 Powiadomienia na telefonie</strong><p id="push-status" aria-live="polite">Sprawdzanie obsługi powiadomień…</p><small>Nowe, nieprzeczytane wiadomości z obu kont. Bez treści wiadomości na ekranie blokady.</small></div><div class="push-actions"><button type="button" class="button button-outline button-sm" id="push-enable">Włącz powiadomienia</button><button type="button" class="button button-outline button-sm" id="push-test" hidden>Wyślij test</button><button type="button" class="button button-outline button-sm" id="push-disable" hidden>Wyłącz</button></div></div>'+panel(state.mailbox==='inbox'?'Skrzynka odbiorcza':'Wysłane',items||empty('Brak wiadomości.'));
 }
 function renderNotes(d) {
   const items=(d.items||[]).map(x=>`<div class="event-item">${dateBox(x.date)}<div class="event-main"><h3>${esc(x.category||'Uwaga')} <span class="pill ${x.sentiment==='positive'?'good':x.sentiment==='negative'?'danger':''}">${x.sentiment==='positive'?'Pozytywna':x.sentiment==='negative'?'Negatywna':'Neutralna'}</span></h3><p>${esc(x.text)}</p></div><div class="event-right">${esc(x.teacher)}</div></div>`).join('');
@@ -297,5 +298,25 @@ function initEvents() {
     else if(action==='retry')navigate(state.page);
   });
 }
+window.SynergiaPushApp = {
+  getUser: () => state.user,
+  async openMessageInProfile(profileId, messageId) {
+    if(!state.user || state.user.mode!=='live')return;
+    if((state.user.profiles||[]).some(p=>p.id===profileId) &&
+        state.user.active_profile_id!==profileId) {
+      const user=await request('/api/profiles/switch',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({profile_id:profileId})});
+      showApp(user);
+    }
+    state.mailbox='inbox';
+    state.refresh=true;
+    const ok=await navigate('messages');
+    if(ok){
+      const index=state.messages.findIndex(x=>String(x.id)===String(messageId));
+      if(index>=0)await openMessage(index);
+    }
+  }
+};
 async function init() { initEvents(); try { const user=await request('/api/session'); if(user.authenticated)showApp(user); else showAuth(); } catch {showAuth();} }
 init();

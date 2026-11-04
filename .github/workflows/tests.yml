@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/session-continuity-no-phone-vault
+      - feature/ios-webpush-v1
   pull_request:
     branches:
       - main
@@ -26,7 +27,10 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q app.py session_store.py tests
       - name: Check frontend JavaScript syntax
-        run: node --check static/app.js
+        run: |
+          for js in static/app.js static/messaging.js static/theme.js static/lesson-progress.js static/timetable-extras.js static/push.js static/sw.js; do
+            node --check "$js"
+          done
       - name: Unit and regression tests (mock accounts only)
         run: python -m pytest -q
       - name: Install Chromium browser for visual contrast regression

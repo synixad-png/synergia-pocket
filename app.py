@@ -46,6 +46,7 @@ async def lifespan(_app):
         else:
             print("INFO: Magazyn sesji Redis: PING i zapis/odczyt OK", flush=True)
     yield
+    await PUSH_SERVICE.close()
     for token in list(SESSIONS):
         session = SESSIONS.pop(token)
         await close_session_clients(session)
@@ -377,7 +378,15 @@ async def safety_headers(request: Request, call_next):
 
 @app.get("/api/health")
 async def health():
+    # Keep-warm heartbeat triggers an async, rate-limited inbox check.
+    PUSH_SERVICE.schedule()
     return {"status": "ok", "service": "synergia-pocket"}
+
+
+@app.get("/sw.js")
+async def push_service_worker():
+    return FileResponse(BASE / "static" / "sw.js", media_type="application/javascript",
+                        headers={"Cache-Control": "no-store", "Service-Worker-Allowed": "/"})
 
 
 @app.get("/")
@@ -561,6 +570,7 @@ async def logout(request: Request):
     if session:
         await close_session_clients(session)
     await delete_saved_session(token)
+    await PUSH_SERVICE.forget_token(token)
     response = JSONResponse({"ok": True})
     response.delete_cookie("synergia_session", path="/")
     return response
@@ -773,6 +783,10 @@ async def get_message(message_id: str, request: Request, mailbox: str = "inbox")
 
 from message_features import install_message_routes
 install_message_routes(app, get_session, require_origin, assert_session_current)
+
+from push_features import install_push_routes
+PUSH_SERVICE = install_push_routes(app, STORE, SESSIONS, restore_cookie_session,
+                                   get_session, require_origin, assert_session_current)
 
 if __name__ == "__main__":
     import uvicorn

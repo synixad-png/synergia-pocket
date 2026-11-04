@@ -299,3 +299,19 @@ html[data-theme="dark"] .lesson-live-track{background:#59424e}
 html[data-theme="dark"] .lesson-live-fill,html[data-theme="dark"] .lesson-live-marker{background:#ff7782}
 html[data-theme="dark"] .lesson-live-marker{box-shadow:0 0 0 1px #ff7782}
 @media(max-width:370px){.lesson-live-heading{font-size:10px;gap:5px}}
+
+/* iPhone PWA — opt-in Web Push, stays inside the message panel */
+.push-panel {margin:0 0 14px;padding:15px 17px;border:1px solid var(--line);
+  background:var(--surface);border-radius:15px;display:flex;align-items:center;
+  justify-content:space-between;gap:14px;min-width:0}
+.push-panel strong {font-size:13px;color:var(--ink);display:block}
+.push-panel p {font-size:12px;color:var(--soft-text);line-height:1.5;margin:5px 0}
+.push-panel small {color:var(--soft-text);font-size:11px;line-height:1.5;display:block}
+.push-actions {display:flex;flex-wrap:wrap;gap:7px;flex-shrink:0}
+.push-actions button {white-space:nowrap}
+.push-actions [hidden] {display:none!important}
+@media(max-width:620px) {
+  .push-panel {flex-direction:column;align-items:stretch;padding:13px}
+  .push-actions {flex-wrap:wrap;gap:8px}
+  .push-actions button {flex:1;min-width:0}
+}

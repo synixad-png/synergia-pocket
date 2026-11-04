@@ -97,3 +97,20 @@ Instancja darmowego Render Key Value `synergia-pocket-sessions` została utworzo
 ### Aktualny czas na planie lekcji
 
 Na dzisiejszych, nieodwołanych, trwających lekcjach pojawia się poziomy czerwony pasek postępu oraz aktualna godzina i liczba minut od rozpoczęcia zajęć. Wskazanie liczone jest w strefie Europe/Warsaw, aktualizowane co 15 sekund bez odświeżania danych Synergii. Po zakończeniu lekcji znacznik znika. Funkcja nie wymaga dodatkowych uprawnień API ani dostępu do haseł.
+
+## Powiadomienia Push na iPhone (wersja testowa)
+
+- Otwórz Synergia Pocket z ikony na ekranie początkowym iPhone'a (iOS 16.4+).
+- Zaloguj się, otwórz **Wiadomości** i stuknij **Włącz powiadomienia**.
+- Zezwól na powiadomienia systemowe i wybierz **Wyślij test**. Zgoda wymaga dotknięcia przycisku.
+- Jedna subskrypcja iPhone'a monitoruje do dwóch profili Synergii w bieżącej sesji.
+- Serwer odczytuje tylko listy odebranych wiadomości (do 30 na profil); nie odczytuje treści.
+- Podczas włączania zapamiętywany jest stan obecnych wiadomości; powiadomienia pojawiają się wyłącznie o później wykrytych nowych, nieprzeczytanych wiadomościach.
+- Web Push jest sprawdzany wyłącznie po wywołaniach endpointu /api/health przez harmonogram GitHub Actions. Harmonogram działa w dni robocze 07:03–17:53 w strefie Europe/Warsaw i nie jest gwarantowany. Opóźnienia do 10+ minut i pominięte wywołania są możliwe.
+- Sesja musi być ważna, a jej ciasteczka Synergia nadal umożliwiać odczyt wiadomości. Ponowne logowanie lub zmiana uprawnień Librusa może przerwać powiadomienia.
+- Rejestracje są szyfrowane na serwerze Fernet i zapisywane w Redis z ograniczonym czasem życia. Bez haseł. Bez treści i nazwisk nauczycieli w Push.
+- Render Free Key Value jest nietrwały: restart Redis kasuje subskrypcje i sesje; wtedy ponownie otwórz aplikację, aby odnowić subskrypcję, lub włącz powiadomienia ponownie.
+- Po otwarciu aplikacji istniejąca subskrypcja (jeśli zgoda jest aktywna) zostaje automatycznie odnowiona dla aktualnej sesji. Wylogowanie usuwa powiązanie z serwerem.
+- **Nie przeprowadzono rzeczywistego testu doręczenia na Twoim iPhonie ani przez rzeczywiste konto szkolne**. Test Push pozwala sprawdzić dostarczenie bez wysyłania wiadomości szkolnych.
+- Wymagane zmienne środowiskowe w Render: SYNERGIA_VAPID_PRIVATE_KEY (tajny klucz prywatny) i SYNERGIA_VAPID_PUBLIC_KEY (klucz publiczny). Nie commituj ich do GitHub.
+- Na razie powiadomienia obejmują **nowe wiadomości**, nie oceny ani zastępstwa. Rozszerzenie na inne zdarzenia wymaga osobnego sprawdzenia skutków pobierania danych.
