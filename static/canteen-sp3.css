@@ -1,0 +1,23 @@
+/* Publiczna Stołówka SP3 — style izolowane, bez zmiany innych ekranów. */
+.canteen-panel { min-width:0; margin-bottom:1rem; }
+.canteen-panel .section-title { margin-bottom:.8rem; }
+.canteen-menu-top { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin: .7rem 0 1rem; }
+.canteen-menu-top strong { font-size:1.08rem; color:var(--ink); }
+.canteen-menu-picture { padding: .7rem; border-radius:14px; background:var(--bg); border:1px solid var(--line); }
+.canteen-menu-picture img { display:block; max-width:100%; width:auto; height:auto; max-height:780px; margin:0 auto; border-radius:8px; }
+.canteen-panel p { line-height:1.65; color:var(--soft-text,var(--muted)); }
+.canteen-hint { font-size:.88rem; }
+.canteen-important { font-size:1.03rem; font-weight:750; color:var(--ink)!important; }
+.canteen-warning { border:1px solid var(--line); background:var(--surface); color:var(--ink); padding:.9rem 1rem; line-height:1.6; border-radius:14px; margin-bottom:1rem; }
+.canteen-payment-amount { display:flex; gap:.8rem; align-items:center; flex-wrap:wrap; padding: .5rem 0; color:var(--ink); }
+.canteen-payment-amount strong { font-size:1.25rem; }
+.canteen-actions { display:flex; gap:.65rem; flex-wrap:wrap; margin-top:1rem; }
+.canteen-actions .button { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; font-weight:650; }
+.canteen-notices p { color:var(--ink); margin:.4rem 0; }
+.canteen-footnote { font-size:.82rem; line-height:1.55; color:var(--soft-text,var(--muted)); margin:0 0 1.2rem; }
+html[data-theme="dark"] .canteen-warning { color:var(--ink); background:var(--surface); }
+@media(max-width:620px) {
+  .canteen-actions { flex-direction:column; }
+  .canteen-actions .button { width:100%; min-height:44px; white-space:normal; text-align:center; }
+  .canteen-menu-picture { padding:.35rem; }
+}
