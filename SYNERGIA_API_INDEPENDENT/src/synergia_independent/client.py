@@ -528,7 +528,7 @@ class SynergiaClient:
             raise MessageWriteUncertain(sent=False)
         if reply.status >= 500:
             raise MessageWriteUncertain(sent=None)
-        if reply.status < 200:
+        if not 200 <= reply.status < 300:
             raise MessageWriteUncertain(sent=None)
         try:
             parsed = json.loads(reply.text) if reply.text.strip() else {}
