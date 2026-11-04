@@ -1,13 +1,12 @@
-FROM python:3.12-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py demo.py session_store.py message_features.py push_features.py school_files.py message_attachments.py canteen_sp3.py canteen_calendar.py canteen_payments.py ./
-COPY data ./data
-COPY static ./static
-RUN useradd --create-home --uid 10001 webuser
-USER webuser
+FROM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS build
+WORKDIR /work
+COPY . .
+WORKDIR /work/src
+RUN go test -count=1 ./... && go vet ./...
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /pocket .
+FROM alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63
+RUN apk add --no-cache ca-certificates
+COPY --from=build /pocket /usr/local/bin/pocket
+USER 65532:65532
 EXPOSE 10000
-CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers"]
-
+ENTRYPOINT ["/usr/local/bin/pocket"]

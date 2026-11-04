@@ -1,11 +1,11 @@
 services:
   - type: web
-    name: synergia-pocket-web
+    name: synergia-pocket-own-api-test
     runtime: docker
+    branch: test/independent-pocket-web
     plan: free
     region: frankfurt
     healthCheckPath: /api/health
-    autoDeployTrigger: off
     envVars:
-      - key: SYNERGIA_FORCE_HTTPS
-        value: "1"
+      - key: PUBLIC_ORIGIN
+        value: https://synergia-pocket-own-api-test.onrender.com
