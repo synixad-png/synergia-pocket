@@ -163,8 +163,14 @@ async function dashboard() {
 }
 function gradeKindClass(value) { const n=parseInt(value,10); return n<=2?'low':n===3?'mid':n>=5?'good':''; }
 function renderGrades(d) {
-  const cards=(d.subjects||[]).map(s=>`<article class="subject-card"><h3>${esc(s.name)}</h3><div class="grade-chip-row">${(s.grades||[]).map(g=>`<div class="grade-chip ${gradeKindClass(g.value)}" title="${esc(g.category)} · ${dateLabel(g.date)}"><span>${esc(g.value)}</span><small>${esc(g.weight==null?'waga —':'waga '+g.weight)}</small></div>`).join('')}</div><div class="grade-foot">${esc(s.grades?.length||0)} ocen · szczegóły po wskazaniu oceny</div></article>`).join('');
-  return head('Oceny',`Wszystkie pobrane oceny: ${d.count??0}. Nie wyliczamy średniej bez potwierdzonego szkolnego systemu oceniania.`)+`<div class="subject-grid">${cards||empty('Brak ocen w tym roku szkolnym.')}</div>`;
+  const cards=(d.subjects||[]).map(s=>`<article class="subject-card"><h3>${esc(s.name)}</h3><div class="grade-chip-row">${(s.grades||[]).map(g=>{
+    const value=g.source==='point'&&g.max_points!=null?String(g.points??g.value)+' / '+g.max_points+' pkt':String(g.value||'Opis');
+    const long=value.length>5||g.source==='text';
+    return `<div class="grade-chip ${long?'grade-chip-long':gradeKindClass(g.value)}" title="${esc(g.category)} · ${dateLabel(g.date)}"><span>${esc(value)}</span><small>${esc(g.source_label||'Klasyczne')} · ${esc(g.category||'Ocena')}${g.weight==null?'':' · waga '+esc(g.weight)}</small>${(g.comments||[]).length?`<small>${esc(g.comments.join(' · '))}</small>`:''}</div>`;
+  }).join('')}</div><div class="grade-foot">${esc(s.grades?.length||0)} ocen</div></article>`).join('');
+  const sources=(d.sources||[]).map(s=>`${esc(s.label)}: ${s.state==='unavailable'?'niedostępne':s.state==='failed'||s.state==='unsupported'?'błąd':esc(s.count)}`).join(' · ');
+  const warning=(d.warnings||[]).length?`<div class="error-box" role="status">Niepełny odczyt: ${(d.warnings||[]).map(esc).join(' ')}</div>`:'';
+  return head('Oceny',`Wszystkie pobrane oceny: ${d.count??0}. Bez filtrowania semestru i bez wyliczania niepotwierdzonej średniej.`)+warning+(sources?`<p class="grades-sources">${sources}</p>`:'')+`<div class="subject-grid">${cards||empty('Brak pobranych ocen.')}</div>`;
 }
 function renderTimetable(d) {
   const end=addDays(state.week,4);
@@ -323,3 +329,4 @@ window.SynergiaPushApp = {
 };
 async function init() { initEvents(); try { const user=await request('/api/session'); if(user.authenticated)showApp(user); else showAuth(); } catch {showAuth();} }
 init();
+

@@ -315,3 +315,7 @@ html[data-theme="dark"] .lesson-live-marker{box-shadow:0 0 0 1px #ff7782}
   .push-actions {flex-wrap:wrap;gap:8px}
   .push-actions button {flex:1;min-width:0}
 }
+
+
+/* Complete grade sources: text/descriptive entries must not be clipped to a numeric chip. */
+.grade-chip-long{flex:1 1 100%;max-width:100%;width:auto;align-items:flex-start;text-align:left;padding:13px;font-size:14px;line-height:1.6;overflow-wrap:anywhere}.grade-chip-long span{white-space:pre-wrap}.grade-chip small{max-width:100%;white-space:normal;overflow-wrap:anywhere}.grades-sources{color:var(--muted,#8493ab);font-size:12px;line-height:1.8;margin:12px 0 20px}

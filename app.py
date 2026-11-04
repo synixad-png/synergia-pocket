@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from session_store import configured_store
+from grade_features import collect_grades
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -602,22 +603,7 @@ async def optional(fetch, default):
 
 async def live_section(client: Any, section: str, week: date | None, mailbox: str) -> dict[str, Any]:
     if section == "grades":
-        grades, subjects, categories = await asyncio.gather(
-            client.grades(), optional(client.subjects, {}), optional(client.grade_categories, {}))
-        grouped: dict[str, list[dict[str, Any]]] = {}
-        for g in grades:
-            cat = categories.get(val(g, "category_id"))
-            name = lookup(subjects, val(g, "subject_id"), "Inny przedmiot")
-            grouped.setdefault(name, []).append({
-                "value": str(val(g, "value", "")), "date": val(g, "add_date"),
-                "category": val(cat, "name", "Ocena"), "weight": val(cat, "weight", None),
-                "comments": val(g, "comments", []), "semester": val(g, "semester"),
-                "kind": "semestralna" if val(g, "is_semester", False) else
-                        "roczna" if val(g, "is_final", False) else
-                        "proponowana" if val(g, "is_semester_proposition", False) or val(g, "is_final_proposition", False) else "cząstkowa"
-            })
-        return {"subjects": [{"name": name, "grades": sorted(items, key=lambda x: x["date"] or "", reverse=True)}
-                             for name, items in sorted(grouped.items())], "count": len(grades)}
+        return await collect_grades(client)
 
     if section == "timetable":
         entries, subjects, rooms, teachers = await asyncio.gather(
@@ -807,3 +793,4 @@ if __name__ == "__main__":
     import uvicorn
     # Domyślnie WYŁĄCZNIE ten komputer — brak wystawienia haseł do sieci LAN.
     uvicorn.run(app, host=os.getenv("SYNERGIA_HOST", "127.0.0.1"), port=int(os.getenv("PORT", os.getenv("SYNERGIA_PORT", "8765"))))
+
