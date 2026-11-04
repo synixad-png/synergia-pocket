@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1] / "static"
 html = (ROOT / "index.html").read_text()
 fake = r"""
 window.__canteenBroken = false;
+window.__paymentExample = null;
 window.fetch = async (url, init={}) => {
   const path=String(url).split('?')[0];
   const respond=(data,status=200)=>new Response(JSON.stringify(data),{
@@ -33,7 +34,7 @@ window.fetch = async (url, init={}) => {
         {date:'2026-10-30',status:'published',items:['Archiwalny obiad']}
       ]},
       notices:['Karta zapisu jest wymagana. <script>alert(1)</script>'],
-      payment:{verified:false,message:'Brak aktualnej kwoty.'}
+      payment:window.__paymentExample || {verified:false,message:'Brak aktualnej kwoty.'}
     });
   }
   if(path.startsWith('/api/section/')) return respond({
@@ -105,6 +106,31 @@ with sync_playwright() as playwright:
         # Every date stays inside the viewport, including a narrow iPhone.
         assert page.locator(".canteen-dates").bounding_box()['width']<=width
         page.screenshot(path=f"/tmp/canteen-{width}-{theme}.png",full_page=True)
+        page.evaluate('''window.__paymentExample={status:'ok',billing_month:'2026-11',announcements:[
+          {id:'new',period:'2026-11',period_label:'listopad 2026',period_status:'current',
+           amount:'260,00 zł',meal_count:20,unit_price:'13,00 zł',scope:'Klasy I–VIII',
+           deadline:'2026-11-08',window_start:'2026-11-04',complete:true,
+           bank_account:'04 1020 5226 0000 6502 0416 0479',transfer_title:'Imię dziecka i klasa',
+           title:'Ogłoszenie <script>alert(1)</script>',checked_at:'2026-11-04T11:00:00Z',source_status:'live'},
+          {id:'old',period:'2026-05',period_label:'maj 2026',period_status:'archive',
+           amount:'247,00 zł',scope:'Klasy I–VIII',deadline:'2026-05-08',complete:true,
+           title:'Komunikat archiwalny',checked_at:'2026-11-04T11:00:00Z',source_status:'saved'},
+          {id:'future',period:'2026-12',period_label:'grudzień 2026',period_status:'upcoming',
+           amount:'234,00 zł',scope:'Klasy I–VIII',deadline:'2026-12-08',complete:true,
+           title:'Następny miesiąc',checked_at:'2026-11-04T11:00:00Z',source_status:'live'}
+        ]}; navigate('canteen-sp3');''')
+        expect(page.locator('.canteen-payments .canteen-payment-card').first).to_contain_text('listopad 2026')
+        expect(page.locator('.canteen-payments .canteen-payment-card').first).to_contain_text('260,00 zł')
+        expect(page.locator('.canteen-payments .canteen-payment-card').first).to_contain_text('04 1020 5226')
+        expect(page.locator('.canteen-payments .canteen-payment-card').first).to_contain_text('8 listopada 2026')
+        expect(page.locator('.canteen-payment-card.is-archive')).not_to_be_visible()
+        page.locator('.canteen-payment-archive summary').click()
+        expect(page.locator('.canteen-payment-card.is-archive')).to_be_visible()
+        expect(page.locator('.canteen-payment-card.is-archive')).to_contain_text('maj 2026')
+        expect(page.locator('.canteen-payment-card.is-archive')).to_contain_text('247,00 zł')
+        assert page.locator('#content script, #content img, #content a').count()==0
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        page.screenshot(path=f'/tmp/canteen-payments-{width}-{theme}.png',full_page=True)
         page.evaluate("window.__canteenBroken=true; navigate('canteen-sp3')")
         expect(page.locator(".canteen-warning")).to_contain_text("Nie udało się teraz odczytać")
         expect(page.locator(".canteen-daily")).to_contain_text("Brak opublikowanego jadłospisu")
