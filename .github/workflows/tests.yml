@@ -25,7 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pytest httpx
       - name: Check Python syntax
-        run: python -m compileall -q app.py session_store.py tests
+        run: python -m compileall -q app.py session_store.py school_files.py message_attachments.py tests
       - name: Check frontend JavaScript syntax
         run: |
           for js in static/app.js static/messaging.js static/theme.js static/lesson-progress.js static/timetable-extras.js static/push.js static/school-files.js static/message-attachments.js static/sw.js; do
@@ -41,6 +41,8 @@ jobs:
         run: python tests/browser_theme_check.py
       - name: Check school document download in real Chromium (mobile and desktop)
         run: python tests/browser_school_files_check.py
+      - name: Check message attachment download in Chromium (mobile and desktop)
+        run: python tests/browser_message_attachments_check.py
       - name: Build production Docker image and smoke test actual entrypoint
         run: |
           docker build --tag synergia-pocket:test .
