@@ -200,3 +200,9 @@ def test_unknown_file_and_invalid_id_are_rejected():
             assert fake.downloads == []
         finally:
             SESSIONS.pop(token, None)
+
+
+def test_production_dockerfile_copies_new_module():
+    from pathlib import Path
+    docker = (Path(__file__).resolve().parents[1] / 'Dockerfile').read_text()
+    assert any('school_files.py' in line and line.startswith('COPY ') for line in docker.splitlines())
