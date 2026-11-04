@@ -136,6 +136,7 @@ button{cursor:pointer;font:inherit}button:disabled{opacity:.5;cursor:wait}.prima
   if(!res.ok)throw Error(data.error||'Błąd operacji');return data;
  }
  function drawTable(section,records){
+  if(window.PocketGUI?.render(section,records))return;
   const specs=columns[section];const wrap=document.createElement('div');wrap.className='tablewrap';
   const table=document.createElement('table');table.className='datatable';
   const thead=document.createElement('thead'),trh=document.createElement('tr');
@@ -420,6 +421,7 @@ button{cursor:pointer;font:inherit}button:disabled{opacity:.5;cursor:wait}.prima
   status('Diagnostyka jest gotowa. Wybierz test pojedynczego modułu albo wszystkich modułów.');
  }
  function selectProfile(id){diagnosticRun++;profile=id;
+  window.PocketGUI?.profileChanged();
   window.SynergiaMessagesV12?.leave();
   window.SynergiaUpdatesV13?.leave();
   document.querySelectorAll('[data-profile]').forEach(b=>{const yes=Number(b.dataset.profile)===id;b.classList.toggle('active',yes);b.setAttribute('aria-selected',String(yes));b.classList.toggle('online',logged[Number(b.dataset.profile)])});
@@ -437,6 +439,7 @@ button{cursor:pointer;font:inherit}button:disabled{opacity:.5;cursor:wait}.prima
   }catch(err){status(err.message,'error')}finally{setBusy(false)}
  });
  async function openSection(section){if(busy)return;
+  if(window.PocketGUI?.intercept(section))return;
   diagnosticRun++;
   if(section!=='updates'&&section!=='health')window.SynergiaUpdatesV13?.leave();
   if((section==='updates'||section==='health')&&window.SynergiaUpdatesV13){
@@ -460,6 +463,7 @@ button{cursor:pointer;font:inherit}button:disabled{opacity:.5;cursor:wait}.prima
   $('view-body').classList.add('blank');
   document.querySelectorAll('[data-section]').forEach(b=>b.classList.toggle('active',b.dataset.section===section));
   if(section==='demo'){
+    if(window.PocketGUI){window.PocketGUI.demo();return;}
     header('DEMO — wyłącznie fikcyjne dane','To nie są informacje z konta szkolnego. Bez logowania i dostępu do internetu.');
     drawTable('messages',[
       {date:'2026-11-04',sender:'Nauczyciel (PRZYKŁAD)',subject:'Zajęcia — PRZYKŁAD',preview:'Testowy tekst wiadomości, bez powiązania z Librusem.'},
@@ -486,6 +490,7 @@ button{cursor:pointer;font:inherit}button:disabled{opacity:.5;cursor:wait}.prima
  document.querySelectorAll('[data-profile]').forEach(b=>b.addEventListener('click',()=>selectProfile(Number(b.dataset.profile))));
  $('exit-button').addEventListener('click',async()=>{if(!confirm('Zamknąć lokalny program SYNERGIA API?'))return;try{await jsonRequest('/api/exit',{method:'POST'});}catch(_){};document.body.textContent='Program został zamknięty. Możesz zamknąć tę kartę.'});
  window.SynergiaMessageHostV12={profile:()=>profile,logged:()=>logged[profile],active:()=>Boolean(document.querySelector('[data-section="messages"].active')),status,header,busy:setBusy};
+ window.PocketGUIHost={profile:()=>profile,logged:()=>logged[profile],openSection,selectProfile,header,status,files:showHomeworkFiles};
  window.SynergiaUpdatesHostV13={profile:()=>profile,logged:()=>logged[profile],status,header,openSection,restore:states=>{
    let changed=false;for(let i=0;i<2;i++)if(states[i]===true&&!logged[i]){logged[i]=true;changed=true;}
    if(changed)selectProfile(logged[profile]?profile:(logged[0]?0:1));

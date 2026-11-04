@@ -43,3 +43,11 @@ Testy: `cd src && go test -race -count=1 ./... && go vet ./...`.
 Testy klienta i izolacji hostowanych sesji korzystają z danych fikcyjnych.
 Test prawdziwych danych Synergii wymaga logowania użytkownika na stronie.
 W tym wdrożeniu nie wysyłano rzeczywistych wiadomości szkolnych.
+
+## Interfejs web 0.15
+
+Układ inspirowany nawigacją Librusa: menu boczne, dolne skróty na telefonie,
+wybór profili, biurko, oceny według przedmiotów i kolorowe karty planu.
+Tryb ciemny domyślnie, jasny po zmianie motywu. W pamięci lokalnej zapisuje
+się tylko wybór motywu. DEMO jest jawnie oznaczone i używa wyłącznie
+fikcyjnych danych; nie wysyła wiadomości ani nie pobiera plików szkolnych.

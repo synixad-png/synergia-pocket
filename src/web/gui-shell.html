@@ -1,0 +1,49 @@
+<header class="app-topbar">
+ <div class="topbar-brand"><button type="button" class="icon-button" id="menu-toggle" aria-label="Otwórz menu" aria-controls="app-sidebar" aria-expanded="false">☰</button><span class="app-logo" aria-hidden="true">S</span><div><h1>SYNERGIA POCKET TEST</h1><span class="brand-caption">Dziennik ucznia</span></div></div>
+ <div class="topbar-actions"><button type="button" class="icon-button" id="theme-toggle" aria-label="Zmień motyw" title="Zmień motyw">◐</button><button type="button" id="account-toggle" class="account-toggle" aria-controls="account-drawer" aria-expanded="false"><span class="avatar" id="top-avatar" aria-hidden="true">1</span><span id="top-account">Zaloguj profil</span><span aria-hidden="true">⌄</span></button></div>
+</header>
+<button type="button" class="menu-backdrop" id="menu-backdrop" aria-label="Zamknij menu" hidden></button>
+<aside class="app-sidebar" id="app-sidebar" aria-label="Menu dziennika">
+ <div class="sidebar-heading">TWÓJ DZIENNIK <span class="test-pill">TEST</span></div>
+ <nav class="nav" aria-label="Menu danych">
+  <button type="button" class="secondary home-button active" data-go="home">Biurko</button>
+  <button class="secondary" data-section="grades">Oceny</button>
+  <button class="secondary" data-section="timetable">Plan lekcji</button>
+  <button class="secondary" data-section="attendance">Frekwencja</button>
+  <button class="secondary" data-section="agenda">Terminarz</button>
+  <button class="secondary" data-section="homework">Zadania domowe</button>
+  <button class="secondary" data-section="notes">Uwagi</button>
+  <span class="nav-heading">KOMUNIKACJA</span>
+  <button class="secondary" data-section="messages">Wiadomości</button>
+  <button class="secondary" data-section="notices">Ogłoszenia</button>
+  <button class="secondary" data-section="contacts">Kontakty</button>
+  <button class="secondary" data-section="schoolfiles">Dokumenty szkoły</button>
+  <span class="nav-heading">KONTO I USTAWIENIA</span>
+  <button class="secondary" data-section="updates" id="updates-nav">Powiadomienia</button>
+  <button class="secondary" data-section="freedays">Dni wolne</button>
+  <button class="secondary" data-section="me">Dane konta</button>
+  <button class="secondary" data-section="health">Kontrola API</button>
+  <button class="secondary" data-section="diagnostics">Diagnostyka</button>
+  <button class="secondary demo" data-section="demo">Zobacz DEMO</button>
+  <button class="secondary exit" id="exit-button" type="button">Wyloguj oba profile</button>
+ </nav>
+ <p class="sidebar-footer">Pocket Test · własne API<br>Osobna wersja do testów</p>
+</aside>
+<main class="app-workspace">
+ <div class="workspace-top"><p class="breadcrumb">Dziennik <span aria-hidden="true">/</span> <span id="breadcrumb-current">Biurko</span></p><span id="today-label"></span></div>
+ <div id="demo-banner" class="demo-banner" hidden>TRYB DEMO — wszystkie wyświetlane dane są przykładowe. <button type="button" id="leave-demo">Zakończ DEMO</button></div>
+ <section class="panel workspace-panel"><div class="content">
+  <div class="view-heading"><div><h3 id="view-title">Biurko</h3><p class="intro" id="view-desc">Wszystkie najważniejsze informacje w jednym miejscu.</p></div><span class="view-profile" id="view-profile">Profil 1</span></div>
+  <div id="status" class="status" role="status" aria-live="polite">Witaj. Zaloguj profil lub wybierz DEMO.</div>
+  <div id="view-body" class="blank">Ładowanie widoku…</div>
+ </div></section>
+ <div class="footer"><span>Synergia Pocket Test · własny klient API</span><span>Połączenie HTTPS · oddzielne profile</span></div>
+</main>
+<nav class="bottom-nav" aria-label="Skróty dziennika"><button type="button" data-go="home" class="active">Biurko</button><button type="button" data-go="grades">Oceny</button><button type="button" data-go="timetable">Plan lekcji</button><button type="button" data-go="messages">Wiadomości</button><button type="button" data-go="menu">Więcej</button></nav>
+<div class="account-overlay" id="account-overlay" hidden><section id="account-drawer" class="account-sheet" role="dialog" aria-modal="true" aria-labelledby="account-heading"><div class="sheet-heading"><div><span class="eyebrow">MULTIKONTO</span><h2 id="account-heading">Twoje profile</h2></div><button type="button" class="icon-button" id="account-close" aria-label="Zamknij profile">✕</button></div>
+ <p class="small">Wybierz profil, aby zalogować konto lub przełączyć ucznia.</p>
+ <div class="profilebar" role="tablist" aria-label="Konta"><button type="button" class="profile active" data-profile="0" aria-selected="true"><span class="dot"></span>Profil 1</button><button type="button" class="profile" data-profile="1" aria-selected="false"><span class="dot"></span>Profil 2</button></div><p id="account-status" class="small">Brak zalogowanego konta</p>
+ <form id="login-form" class="formgrid" autocomplete="off"><div class="field"><label for="login">Login Synergia</label><input id="login" autocomplete="username" spellcheck="false" placeholder="Wpisz login" maxlength="128" required></div><div class="field"><label for="password">Hasło</label><input id="password" type="password" autocomplete="current-password" placeholder="Wpisz hasło" maxlength="300" required></div><button id="login-button" type="submit" class="primary">Zaloguj</button></form>
+ <p id="account-feedback" class="account-feedback" role="status" aria-live="polite"></p><p class="small">Hasło nie jest zapisywane przez aplikację. Każdy profil ma oddzielną sesję.</p>
+</section></div>
+<dialog class="grade-dialog" id="grade-dialog"><div id="grade-detail"></div><button type="button" id="grade-close" class="primary">Zamknij</button></dialog>

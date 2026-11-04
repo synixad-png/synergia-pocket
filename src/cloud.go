@@ -108,7 +108,7 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Method", 405)
 			return
 		}
-		serveJSON(w, 200, map[string]string{"status": "ok", "service": "synergia-pocket-own-api", "version": "web-0.14", "client": "own-go-v0.13"})
+		serveJSON(w, 200, map[string]string{"status": "ok", "service": "synergia-pocket-own-api", "version": "web-0.15", "client": "own-go-v0.13"})
 		return
 	}
 	origin, _ := url.Parse(c.origin)
@@ -265,6 +265,7 @@ func cloudHTML() string {
 	pwa := `<meta name="theme-color" content="#0d1b2c"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pocket Test"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="icon" href="/icon.svg"><style>body{padding-bottom:env(safe-area-inset-bottom)}header{padding-top:max(18px,env(safe-area-inset-top))}.brand h1{font-size:clamp(17px,3vw,26px)}.subtitle{line-height:1.6}@media(max-width:700px){.nav button{min-height:44px;white-space:normal}.notice{font-size:12px}}.cloud-hint{padding:12px 16px;color:#bdd3e9;background:#112137;border:1px solid #304c69;border-radius:10px;line-height:1.6;margin-bottom:16px}</style>`
 	page = strings.Replace(page, "</head>", pwa+"</head>", 1)
 	page = strings.Replace(page, `<main>`, `<main><p class="cloud-hint">Na iPhonie: Safari → Udostępnij → Do ekranu głównego. To osobna aplikacja testowa; logowanie wykonujesz tutaj niezależnie.</p>`, 1)
+	page = librusGUI(page)
 	return strings.Replace(page, "</body>", `<script>if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script></body>`, 1)
 }
 func runCloud() error {
@@ -306,7 +307,7 @@ func runCloud() error {
 			}
 		}
 	}()
-	log.Print("Synergia Pocket Test web-0.14 listening; own API client enabled")
+	log.Print("Synergia Pocket Test web-0.15 listening; own API client enabled")
 	e = server.ListenAndServe()
 	if errors.Is(e, http.ErrServerClosed) {
 		return nil
