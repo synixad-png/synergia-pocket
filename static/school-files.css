@@ -19,3 +19,5 @@
   .school-file-actions { width: 100%; padding-left: 0; }
   .school-file-actions button { width: 100%; min-height: 44px; }
 }
+/* Dodatkowa pozycja menu nie może ukryć wylogowania na małym iPhonie. */
+@media(max-width: 900px) { .sidebar { overflow-y: auto; overscroll-behavior: contain; } }
