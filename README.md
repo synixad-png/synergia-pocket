@@ -114,3 +114,12 @@ Na dzisiejszych, nieodwołanych, trwających lekcjach pojawia się poziomy czerw
 - **Nie przeprowadzono rzeczywistego testu doręczenia na Twoim iPhonie ani przez rzeczywiste konto szkolne**. Test Push pozwala sprawdzić dostarczenie bez wysyłania wiadomości szkolnych.
 - Wymagane zmienne środowiskowe w Render: SYNERGIA_VAPID_PRIVATE_KEY (tajny klucz prywatny) i SYNERGIA_VAPID_PUBLIC_KEY (klucz publiczny). Nie commituj ich do GitHub.
 - Na razie powiadomienia obejmują **nowe wiadomości**, nie oceny ani zastępstwa. Rozszerzenie na inne zdarzenia wymaga osobnego sprawdzenia skutków pobierania danych.
+
+
+### Stołówka SP3: kalendarz posiłków
+
+Zakładka pokazuje listę dań dla wybranej daty bez opuszczania aplikacji. Dostępne są widoki tygodnia i miesiąca, przyciski Dzisiaj/Jutro, oznaczenie dni z jadłospisem i archiwalnych dat. Datę bieżącą wyznacza strefa Europe/Warsaw.
+
+Obraz „Jadłospis szkolny” na stronie SP3 jest przyciskiem do publicznej publikacji Intendent Pro. `canteen_calendar.py` odczytuje uporządkowane dane tej publikacji, wyłącznie dla adresów `/jadlospis/<id>` podlinkowanych przez szkołę przy datowanym nagłówku. Weryfikuje ID, zakres dat i publiczną dostępność; wyświetla standardowy obiad, bez mieszania składników i możliwych zamienników dietetycznych. Nie wymaga OCR, klucza AI ani danych logowania.
+
+Cache źródła działa przez 30 minut. Przy błędzie wyświetlane są ostatnie poprawnie odczytane dane z oznaczeniem czasu odczytu. Na pierwsze uruchomienie dołączono zweryfikowany publiczny zapis na 26–30.10 i 2–6.11.2026 (`data/sp3-calendar.json`); daty pozostają oryginalne i nie są przenoszone na kolejne tygodnie. Brak publikacji oznacza brak danych, a nie potwierdzony dzień bez obiadów. Nowe terminy pojawiają się po odświeżeniu danych ze źródła. Moduł nie pobiera ani nie przekazuje sesji Librusa.

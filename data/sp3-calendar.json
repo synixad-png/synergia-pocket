@@ -1,0 +1,125 @@
+{
+  "school_source": "https://sp3wroc.edupage.org/a/stolowka",
+  "checked_at": "2026-11-04T12:18:37.562014+00:00",
+  "days": [
+    {
+      "date": "2026-10-26",
+      "items": [
+        "Zupa pomidorowa z makaronem",
+        "Kotlet mielony wieprzowy",
+        "Ziemniaki z koperkiem",
+        "Mizeria z jogurtem",
+        "Kompot owocowy",
+        "Owoc"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184874"
+    },
+    {
+      "date": "2026-10-27",
+      "items": [
+        "Zupa jarzynowa z soczewicą",
+        "Zapiekanka z makaronem pełnoziarnistym w sosie serowo brokułowym posypana serem żółtym",
+        "Mix sałat z papryką i ogórkiem",
+        "Woda z pomarańczą"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184874"
+    },
+    {
+      "date": "2026-10-28",
+      "items": [
+        "Krupnik z kaszą pęczak",
+        "Racuchy drożdżowe z cukrem pudrem",
+        "Polewa jogurtowa",
+        "Owoc",
+        "Woda z cytryną"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184874"
+    },
+    {
+      "date": "2026-10-29",
+      "items": [
+        "Zupa kalafiorowa z ziemniakami i koperkiem",
+        "Gołąbki wieprzowe bez zawijania z w sosie pomidorowym",
+        "Kompot owocowy",
+        "Owoc"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184874"
+    },
+    {
+      "date": "2026-10-30",
+      "items": [
+        "Zupa ogórkowa z ryżem",
+        "Ryba panierowana",
+        "Ziemniaki opiekane w ziołach",
+        "Marchewka mini na parze",
+        "Kompot owocowy"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184874"
+    },
+    {
+      "date": "2026-11-02",
+      "items": [
+        "Zupa grochowa z ziemniakami",
+        "Polędwiczki z kurczaka w sezamie",
+        "Ryż brązowy",
+        "Mix sałat z sos vinegrette",
+        "Woda z miętą",
+        "Owoc"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184804"
+    },
+    {
+      "date": "2026-11-03",
+      "items": [
+        "Zupa pomidorowa z ryżem brązowym",
+        "Kotlet jajeczny",
+        "Ziemniaki z koperkiem",
+        "Sałatka ze świeżych warzyw z sosem winegret",
+        "Kompot owocowy"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184804"
+    },
+    {
+      "date": "2026-11-04",
+      "items": [
+        "Zupa ogórkowa z ziemniakami",
+        "Naleśniki z twarogiem",
+        "Polewa jogurtowo - owocowa",
+        "Woda z cytryną i miętą",
+        "Owoc"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184804"
+    },
+    {
+      "date": "2026-11-05",
+      "items": [
+        "Żurek z ziemniakami na wywarze warzywnym",
+        "Spaghetti bolognese",
+        "Trio na parze",
+        "Kompot owocowy"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184804"
+    },
+    {
+      "date": "2026-11-06",
+      "items": [
+        "Krupnik z kaszą jęczmienną",
+        "Ryba panierowana",
+        "Ziemniaki z koperkiem",
+        "Surówka z marchewki i jabłka",
+        "Kompot owocowy"
+      ],
+      "status": "published",
+      "source_url": "https://app.intendentpro.pl/jadlospis/184804"
+    }
+  ]
+}
