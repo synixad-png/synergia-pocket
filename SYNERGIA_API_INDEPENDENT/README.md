@@ -1,4 +1,4 @@
-# SYNERGIA API — niezależny klient (wersja 0.1.0)
+# SYNERGIA API — niezależny klient (wersja 0.2.0)
 
 Oddzielny projekt eksperymentalny. Nie korzysta z pakietu librus-synergia,
 nie importuje kodu Synergia Pocket, nie uruchamia publicznego serwera HTTP
@@ -19,7 +19,8 @@ Nie jest produktem firmy Librus.
 | Oceny i ich kategorie/przedmioty | Implementacja, test |
 | Plan lekcji, zajęcia równoległe, zastępstwa | Implementacja, test |
 | Frekwencja, terminarz, uwagi | Surowe odpowiedzi JSON |
-| Kontakty i wysyłanie/odpowiadanie na wiadomości | Niezaimplementowane |
+| Lista kontaktów, ról i przedmiotów | Implementacja + testy fikcyjne |
+| Pisanie i odpowiadanie (jawne confirm=True; pojedynczy POST) | Implementacja + testy fikcyjne; BRAK testu na prawdziwym koncie |
 | Serwer REST, Web Push, trwała sesja | Niezaimplementowane |
 | Test logowania na rzeczywistym koncie | Nieprzeprowadzony |
 
@@ -46,7 +47,9 @@ Skrypt pyta interaktywnie o login i hasło, nie zapisuje ich do pliku.
 - Żądania kierowane są tylko do jawnie określonych hostów Librusa.
 - Odczyt pełnej treści wiadomości oznacza ją jako przeczytaną;
   w tej wersji celowo implementujemy tylko pobieranie podglądów i list.
-- Program nic nie zapisuje do konta Librusa.
+- Domyślnie program nic nie zapisuje do konta Librusa. Metody wysyłki
+  wykonują pojedynczy POST wyłącznie po jawnym confirm=True.
+  Po niejednoznacznym błędzie trzeba sprawdzić Wysłane; brak automatycznych ponowień.
 - Nie generujemy logów z hasłami, cookies ani treścią wiadomości.
 - HTTP 403 nie jest automatycznie traktowany jak błędne hasło.
 - Nieoficjalny interfejs może się zmienić bez uprzedzenia.
@@ -75,5 +78,19 @@ posiadanym koncie testowym i kontroli regresji funkcji dla obu córek.
 
 1. Rzeczywisty, dobrowolny test logowania i odczytu na wydzielonym koncie.
 2. Obsługa pełnych modeli frekwencji, uwag, wydarzeń i planu przedszkolnego.
-3. Kontakty i bezpieczne, pojedyncze wysyłanie wiadomości bez automatycznych ponowień.
+3. Dobrowolna weryfikacja kontaktów i świadomej wysyłki na osobnym koncie testowym, dopiero po uzyskaniu zgody.
 4. Monitorowanie zmian API, odporność na awarie i opt-in integracja.
+
+## Pisanie wiadomości w v0.2 — WYŁĄCZNIE na świadome polecenie
+
+Metoda send_message(ids, subject, text, confirm=True) najpierw pobiera
+rzeczywistą listę kontaktów dostępnych danemu kontu, następnie sprawdza
+sesję Wiadomości i wykonuje dokładnie jeden POST. Bez confirm=True nic
+nie jest wysyłane. Metoda reply_to_message(id, text, confirm=True)
+najpierw otwiera wiadomość (co może oznaczyć ją jako przeczytaną),
+a następnie odpowiada jej nadawcy dokładnie jednym POST.
+
+Nie przeprowadzono wysyłki na prawdziwym koncie. Zmiany formatów API,
+odmienne uprawnienia szkół i niezbadane odpowiedzi mogą wymagać poprawki.
+Jeśli MessageWriteUncertain.sent == None, wiadomość MOGŁA zostać wysłana;
+nie ponawiaj automatycznie, tylko sprawdź skrzynkę Wysłane.

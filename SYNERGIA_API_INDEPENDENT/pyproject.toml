@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synergia-api-independent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Independent experimental async Python client for the unofficial Librus Synergia gateway"
 requires-python = ">=3.11"
 license = {text = "MIT"}
