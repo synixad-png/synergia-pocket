@@ -259,3 +259,28 @@ html:not([data-theme="dark"]) #dialog-body .message-modal-attachments {
     .auth-screen,.workspace { min-height:100dvh; }
   }
 }
+
+/* Synergia Pocket: safe messaging UI, light/dark and responsive. */
+.message-toolbar{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin:0 0 20px}
+.message-toolbar>span,.compose-profile,.compose-hint,.compose-reply-summary{color:var(--soft-text);font-size:12px;line-height:1.55}
+.message-modal-actions{display:flex;justify-content:flex-end;margin-top:16px}
+.compose-dialog{width:min(610px,100%);max-height:94dvh;overflow-y:auto;background:var(--surface);color:var(--ink)}
+.compose-dialog h2{margin:10px 0 6px;font-size:22px;color:var(--ink)}
+.compose-dialog form{display:grid;gap:9px;min-width:0}
+.compose-dialog label{font-weight:800;font-size:12px;display:block;margin-top:5px;color:var(--ink)}
+.compose-dialog input[type=search],.compose-dialog input:not([type=radio]),.compose-dialog textarea{
+ width:100%;max-width:100%;min-width:0;padding:12px;border-radius:11px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:16px;line-height:1.45}
+.compose-dialog textarea{resize:vertical;min-height:130px}
+.compose-dialog input:focus-visible,.compose-dialog textarea:focus-visible{outline:3px solid var(--blue);outline-offset:1px}
+.compose-contacts{border:1px solid var(--line);border-radius:12px;background:var(--surface);max-height:min(31dvh,270px);overflow-y:auto;padding:5px}
+.contact-choice{display:flex!important;align-items:center;gap:10px;border-radius:10px;padding:10px;cursor:pointer;margin:0!important}
+.contact-choice:hover{background:var(--surface2)}
+.contact-choice input{flex-shrink:0}
+.contact-description{display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere}
+.contact-description strong{color:var(--ink);font-size:13px}
+.contact-description small{color:var(--soft-text);font-weight:500;font-size:11px;line-height:1.4}
+.compose-preview{border:1px solid var(--line);background:var(--surface2);border-radius:12px;padding:14px;overflow-wrap:anywhere}
+.compose-preview p{font-size:12px;white-space:pre-wrap;color:var(--ink);line-height:1.5;margin:6px 0}
+.compose-preview small{color:var(--soft-text);font-size:11px;line-height:1.5}
+.compose-reply-summary{background:var(--surface2);border-radius:10px;padding:10px;overflow-wrap:anywhere}
+@media(max-width:620px){.compose-dialog{padding:18px 15px;width:100%;max-height:96dvh}.compose-contacts{max-height:29dvh}.message-toolbar{display:grid;gap:8px}.message-toolbar .button{width:100%}}

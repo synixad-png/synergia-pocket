@@ -759,7 +759,7 @@ async def get_message(message_id: str, request: Request, mailbox: str = "inbox")
                 raise error(404, "Nie znaleziono wiadomości")
             result = {"id": val(msg, "id"), "subject": val(msg, "topic"),
                       "sender": val(msg, "sender_name"), "date": val(msg, "send_date"),
-                      "body": val(msg, "content"), "attachments": [val(a, "filename") for a in val(msg, "attachments", [])]}
+                      "body": val(msg, "content"), "no_reply": bool(val(msg, "no_reply", False)), "attachments": [val(a, "filename") for a in val(msg, "attachments", [])]}
         if not result:
             raise error(404, "Nie znaleziono wiadomości")
         profile.cache.pop(f"messages::{mailbox}", None)
@@ -767,6 +767,9 @@ async def get_message(message_id: str, request: Request, mailbox: str = "inbox")
 
 
 
+
+from message_features import install_message_routes
+install_message_routes(app, get_session, require_origin, assert_session_current)
 
 if __name__ == "__main__":
     import uvicorn

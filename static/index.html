@@ -14,6 +14,7 @@
   <script src="/static/theme.js"></script>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
+  <script src="/static/messaging.js" defer></script>
 </head>
 <body>
   <section id="auth" class="auth-screen">
@@ -147,6 +148,26 @@
   <div id="message-dialog" class="dialog-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
     <div class="dialog"><div class="dialog-top"><span class="pill">Wiadomość</span><button id="dialog-close" class="icon-button" aria-label="Zamknij">×</button></div>
       <div id="dialog-body"></div>
+    </div>
+  </div>
+  <div id="compose-dialog" class="dialog-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="compose-title">
+    <div class="dialog compose-dialog">
+      <div class="dialog-top"><span class="pill">POCZTA SZKOLNA</span><button id="compose-close" type="button" class="icon-button" aria-label="Zamknij">×</button></div>
+      <h2 id="compose-title">Nowa wiadomość</h2><p id="compose-profile" class="compose-profile"></p>
+      <form id="compose-form" autocomplete="off">
+        <div id="compose-recipient-area">
+          <label for="compose-find">Wybierz pracownika szkoły</label>
+          <input type="search" id="compose-find" placeholder="Szukaj nazwiska, stanowiska lub przedmiotu">
+          <div id="compose-contacts" class="compose-contacts" role="group" aria-label="Lista pracowników szkoły"></div>
+          <small class="compose-hint">Klasa jest podawana wyłącznie przy potwierdzonym wychowawcy dziecka. Pozostałych klas nauczyciela Librus może nie udostępniać.</small>
+        </div>
+        <p id="compose-reply-summary" class="compose-reply-summary hidden"></p>
+        <div id="compose-subject-area"><label for="compose-subject">Temat</label><input id="compose-subject" maxlength="200" placeholder="Temat wiadomości"></div>
+        <label for="compose-text">Treść wiadomości</label><textarea id="compose-text" maxlength="10000" rows="6" placeholder="Napisz wiadomość…"></textarea>
+        <div id="compose-preview" class="compose-preview hidden"></div>
+        <p id="compose-error" class="form-error" role="alert" aria-live="polite"></p>
+        <button type="submit" id="compose-submit" class="button button-primary button-wide">Sprawdź przed wysłaniem</button>
+      </form>
     </div>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>

@@ -190,7 +190,7 @@ function renderMessages(d) {
   state.messages=d.items||[];
   const tabs=`<div class="tabs"><button data-action="inbox" class="tab ${state.mailbox==='inbox'?'active':''}">Odebrane</button><button data-action="outbox" class="tab ${state.mailbox==='outbox'?'active':''}">Wysłane</button></div>`;
   const items=state.messages.map((x,i)=>`<button class="message-row ${x.unread?'unread':''}" data-action="message" data-index="${i}"><span class="message-avatar">${esc((x.sender||x.recipient||'S').slice(0,1).toUpperCase())}</span><span class="message-row-main"><span class="message-row-top"><strong>${esc(x.sender||x.recipient||'Nadawca')}</strong><time>${dateLabel(x.date,true)}</time></span><h3>${esc(x.subject||'Bez tematu')}</h3><p>${esc(x.preview)}</p></span>${x.unread?'<span class="new-dot"></span>':''}</button>`).join('');
-  return head('Wiadomości','Odebrane i wysłane wiadomości szkolne.',tabs)+panel(state.mailbox==='inbox'?'Skrzynka odbiorcza':'Wysłane',items||empty('Brak wiadomości.'));
+  return head('Wiadomości','Odebrane i wysłane wiadomości szkolne.',tabs)+'<div class="message-toolbar"><button type="button" class="button button-primary" data-action="compose-new">✎ Napisz wiadomość</button><span>Wybierz pracownika szkoły z listy kontaktów</span></div>'+panel(state.mailbox==='inbox'?'Skrzynka odbiorcza':'Wysłane',items||empty('Brak wiadomości.'));
 }
 function renderNotes(d) {
   const items=(d.items||[]).map(x=>`<div class="event-item">${dateBox(x.date)}<div class="event-main"><h3>${esc(x.category||'Uwaga')} <span class="pill ${x.sentiment==='positive'?'good':x.sentiment==='negative'?'danger':''}">${x.sentiment==='positive'?'Pozytywna':x.sentiment==='negative'?'Negatywna':'Neutralna'}</span></h3><p>${esc(x.text)}</p></div><div class="event-right">${esc(x.teacher)}</div></div>`).join('');
@@ -208,6 +208,11 @@ async function openMessage(i) {
     const data=await request('/api/message/'+encodeURIComponent(msg.id)+'?mailbox='+encodeURIComponent(state.mailbox));
     if(epoch!==state.messageEpoch)return;
     $('dialog-body').innerHTML=`<h2 id="dialog-title">${esc(data.subject||'Bez tematu')}</h2><small class="message-modal-meta">Od: ${esc(data.sender||'—')} · ${dateLabel(data.date)}</small><div class="body-content"><p class="message-body-text">${esc(data.body||'Brak treści.')}</p></div>${data.attachments?.length?`<small class="message-modal-attachments">Załączniki: ${data.attachments.map(esc).join(', ')} (pobieranie w kolejnej wersji)</small>`:''}`;
+    if (state.mailbox==='inbox' && !data.no_reply && state.user?.mode!=='demo') {
+      const replyBtn=document.createElement('button');replyBtn.type='button';replyBtn.className='button button-primary';replyBtn.textContent='↩ Odpowiedz'; 
+      const actions=document.createElement('div');actions.className='message-modal-actions';actions.append(replyBtn);$('dialog-body').append(actions);
+      replyBtn.addEventListener('click',()=>{closeDialog();window.SynergiaMessaging.reply({id:state.user.active_profile_id,name:state.user.name},data,()=>navigate('messages'));});
+    }
   } catch(e) { if(epoch===state.messageEpoch) $('dialog-body').innerHTML=`<div class="error-box">${esc(errDetail(e))}</div>`; }
 }
 function closeDialog() { $('message-dialog').classList.add('hidden'); }
@@ -288,6 +293,7 @@ function initEvents() {
     else if(action==='week-today'){state.week=monday(new Date());state.selectedDayIndex=Math.min(4,Math.max(0,(new Date().getDay()+6)%7));navigate('timetable');}
     else if(action==='inbox'||action==='outbox'){state.mailbox=action;navigate('messages');}
     else if(action==='message')openMessage(Number(btn.dataset.index));
+    else if(action==='compose-new') window.SynergiaMessaging.compose({id:state.user.active_profile_id,name:state.user.name},()=>navigate('messages'));
     else if(action==='retry')navigate(state.page);
   });
 }
