@@ -260,7 +260,10 @@ def _get_public_data() -> dict:
     result = _empty_state()
     try:
         raw, typ = _fetch(SCHOOL_URL)
-        parsed = _parse_page(raw.decode("utf-8", "replace"), date.today())
+        html = raw.decode("utf-8", "replace")
+        if not re.search(r"stołówka|stolowka|jadłospis|obiady", html, re.I):
+            raise ValueError("Strona szkoły nie zawiera rozpoznawalnej treści stołówki.")
+        parsed = _parse_page(html, date.today())
         result["status"] = "ok"
         result["menu"] = parsed["menu"]
         result["notices"] = parsed["notices"]
