@@ -55,7 +55,7 @@ with sync_playwright() as playwright:
         assert download.suggested_filename == "Załącznik szkolny.txt", download.suggested_filename
         assert not errors, errors
         page.evaluate("navigate('grades')")
-        expect(page.locator("h1")).to_have_text("Oceny")
+        expect(page.locator("#content h1")).to_have_text("Oceny")
         page.close()
     browser.close()
 print("PASS: Chromium school docs, filename*, mobile/desktop, XSS, other tabs")
