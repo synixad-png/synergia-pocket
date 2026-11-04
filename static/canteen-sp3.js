@@ -1,113 +1,116 @@
-/* SP3 Stołówka — publiczny, niezależny moduł (bez danych i haseł Librusa). */
+/* Publiczny jadłospis SP3: daty i dania w aplikacji, bez przekierowań. */
 (() => {
   'use strict';
   const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
-
-  const knownHost = value => {
-    try {
-      const u = new URL(String(value));
-      return u.protocol === 'https:' && u.hostname.toLowerCase() === 'sp3wroc.edupage.org';
-    } catch (_) { return false; }
+  const zone = 'Europe/Warsaw';
+  const today = () => new Intl.DateTimeFormat('sv-SE', {timeZone:zone}).format(new Date());
+  const day = s => new Date(s + 'T12:00:00Z');
+  const iso = d => d.toISOString().slice(0,10);
+  const add = (s,n) => {const d=day(s); d.setUTCDate(d.getUTCDate()+n); return iso(d);};
+  const label = (s,opts) => new Intl.DateTimeFormat('pl-PL', {...opts,timeZone:'UTC'}).format(day(s));
+  const monday = s => add(s,-((day(s).getUTCDay()+6)%7));
+  const valid = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(day(s).getTime()) && iso(day(s))===s;
+  const stamp = value => {
+    const d=new Date(value);
+    return value && !Number.isNaN(d.getTime()) ? new Intl.DateTimeFormat('pl-PL', {
+      day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:zone
+    }).format(d) : 'nieznane';
   };
-  const external = (value, label, cls = 'button button-outline button-sm') =>
-    knownHost(value) ? '<a class="' + cls + '" href="' + esc(value) +
-      '" target="_blank" rel="noopener noreferrer">' + esc(label) + '</a>' : '';
+  let selected=today(), mode='week', data={}, byDate=new Map();
 
-  const formatDate = value => {
-    if (!value) return '';
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? '' :
-      new Intl.DateTimeFormat('pl-PL', {day:'numeric',month:'short',year:'numeric',
-        hour:'2-digit',minute:'2-digit',timeZone:'Europe/Warsaw'}).format(d);
-  };
+  function renderCalendar() {
+    const now=today();
+    const monthStart=selected.slice(0,8)+'01';
+    const start=mode==='month'?monday(monthStart):monday(selected);
+    const count=mode==='month'?42:7;
+    const range=mode==='month'?label(selected,{month:'long',year:'numeric'}):
+      label(start,{day:'numeric',month:'short'})+' – '+label(add(start,6),{day:'numeric',month:'short',year:'numeric'});
+    const buttons=Array.from({length:count},(_,i)=>{
+      const date=add(start,i), entry=byDate.get(date), has=entry?.status==='published' && entry.items?.length;
+      const cls=['canteen-date',date===selected?'selected':'',date===now?'is-today':'',
+        has?'has-menu':'',date.slice(0,7)!==selected.slice(0,7)?'other-month':''].filter(Boolean).join(' ');
+      return '<button type="button" class="'+cls+'" data-canteen-day="'+date+'" aria-pressed="'+(date===selected)+
+        '"'+(date===now?' aria-current="date"':'')+' aria-label="'+esc(label(date,{weekday:'long',day:'numeric',month:'long',year:'numeric'})+
+        (date===now?', dzisiaj':'')+(has?', jadłospis dostępny':entry?.status==='no_meals'?', dzień bez obiadów':', brak jadłospisu'))+'">'+
+        '<span>'+day(date).getUTCDate()+'</span><i aria-hidden="true">'+(has?'●':entry?.status==='no_meals'?'–':'')+'</i></button>';
+    }).join('');
+    const entry=byDate.get(selected);
+    const title=selected===now?'Dzisiaj na obiad':selected===add(now,1)?'Jutro na obiad':'Obiad w wybranym dniu';
+    const items=entry?.status==='published' && Array.isArray(entry.items)?entry.items:[];
+    let body;
+    if(items.length) {
+      body='<ul class="canteen-dishes">'+items.map((name,i)=>'<li><span class="canteen-dish-number" aria-hidden="true">'+(i+1)+
+        '</span><span>'+esc(name)+'</span></li>').join('')+'</ul><p class="canteen-hint">Jadłospis standardowy opublikowany przez szkołę.</p>';
+    } else if(entry?.status==='no_meals') {
+      body='<div class="canteen-empty"><span aria-hidden="true">☀</span><strong>Dzień bez obiadów</strong><p>Tak oznaczono ten dzień w jadłospisie szkoły.</p></div>';
+    } else {
+      body='<div class="canteen-empty"><span aria-hidden="true">▦</span><strong>Brak opublikowanego jadłospisu</strong>'+
+        '<p>Na '+esc(label(selected,{day:'numeric',month:'long'}))+' nie mamy potwierdzonej listy dań. Po publikacji pojawi się tutaj automatycznie.</p></div>';
+    }
+    const archive=selected<now && items.length?'<span class="pill">Jadłospis archiwalny</span>':'';
+    let warning='';
+    const status=data.calendar?.status;
+    if(status==='saved'||status==='stale') {
+      warning='<div class="canteen-warning" role="status">Pokazujemy ostatnio odczytany jadłospis. Nie udało się teraz potwierdzić zmian w źródle. Odczyt: '+esc(stamp(data.calendar.checked_at))+'.</div>';
+    } else if(status==='partial') {
+      warning='<div class="canteen-warning" role="status">Część jadłospisów jest chwilowo niedostępna. Pokazujemy odczytane dni.</div>';
+    } else if(data.status!=='ok'||status==='unavailable') {
+      warning='<div class="canteen-warning" role="status">Nie udało się teraz odczytać jadłospisu. Spróbuj ponownie przyciskiem odświeżania aplikacji.</div>';
+    }
+    return warning+'<div class="canteen-calendar-layout"><section class="canteen-picker" aria-label="Kalendarz obiadów">'+
+      '<div class="canteen-switch" role="group" aria-label="Widok kalendarza">'+
+      ['week','month'].map(m=>'<button type="button" data-canteen-mode="'+m+'" aria-pressed="'+(mode===m)+'">'+(m==='week'?'Tydzień':'Miesiąc')+'</button>').join('')+'</div>'+
+      '<div class="canteen-month-nav"><button type="button" data-canteen-shift="-1" aria-label="Poprzedni '+(mode==='week'?'tydzień':'miesiąc')+'">‹</button>'+
+      '<strong>'+esc(range)+'</strong><button type="button" data-canteen-shift="1" aria-label="Następny '+(mode==='week'?'tydzień':'miesiąc')+'">›</button></div>'+
+      '<div class="canteen-weekdays" aria-hidden="true">'+['Pn','Wt','Śr','Cz','Pt','So','Nd'].map(s=>'<span>'+s+'</span>').join('')+'</div>'+
+      '<div class="canteen-dates">'+buttons+'</div><p class="canteen-legend"><span aria-hidden="true">●</span> Dostępny jadłospis</p>'+
+      '<div class="canteen-shortcuts"><button type="button" class="button button-outline button-sm" data-canteen-go="today">Dzisiaj</button>'+
+      '<button type="button" class="button button-outline button-sm" data-canteen-go="tomorrow">Jutro</button></div></section>'+
+      '<section class="canteen-daily" aria-live="polite" aria-atomic="true"><div class="canteen-daily-header"><span class="eyebrow">'+esc(title)+'</span>'+
+      '<h2>'+esc(label(selected,{weekday:'long'}))+'</h2><p>'+esc(label(selected,{day:'numeric',month:'long',year:'numeric'}))+'</p>'+archive+'</div>'+body+'</section></div>';
+  }
 
   async function view(requestFn) {
-    const data = await requestFn('/api/canteen/sp3');
-    const schoolUrl = knownHost(data.source_url) ?
-      data.source_url : 'https://sp3wroc.edupage.org/a/stolowka';
-    const newsUrl = knownHost(data.news_url) ?
-      data.news_url : 'https://sp3wroc.edupage.org/news/';
-    const notes = Array.isArray(data.notices) ? data.notices : [];
-    const menu = data.menu && typeof data.menu === 'object' ? data.menu : null;
-    const payment = data.payment && typeof data.payment === 'object' ? data.payment : {};
-    const sections = [];
-
-    sections.push('<div class="content-head"><div>' +
-      '<span class="eyebrow">SP3 WROCŁAW · ŹRÓDŁO SZKOLNE</span>' +
-      '<h1>Stołówka</h1>' +
-      '<p>Jadłospis i informacje o opłatach ze strony Szkoły Podstawowej nr 3.</p>' +
-      '</div></div>');
-
-    if (data.status !== 'ok') {
-      sections.push('<div class="canteen-warning" role="status">Nie udało się teraz odczytać strony szkoły. ' +
-        'Poniższe odnośniki prowadzą bezpośrednio do oficjalnego źródła — nie pokazujemy niezweryfikowanego jadłospisu ani opłat.</div>');
-    }
-
-    let menuBody = '';
-    if (menu) {
-      const current = Boolean(menu.is_current);
-      const period = menu.period ? esc(menu.period) : 'Termin niepodany';
-      menuBody += '<div class="canteen-menu-top">' +
-        '<span class="pill">' + (current ? 'Bieżący termin' : 'Archiwalny termin') + '</span>' +
-        '<strong>' + period + '</strong></div>';
-      if (menu.image_id && /^[0-9a-f]{24}$/.test(menu.image_id)) {
-        menuBody += '<div class="canteen-menu-picture"><img loading="lazy" ' +
-          'src="/api/canteen/sp3/menu-image/' + menu.image_id +
-          '" alt="Jadłospis SP3 z okresu ' + period +
-          ' — oryginalny obraz ze strony szkoły" /></div>';
-        menuBody += '<p class="canteen-hint">Jadłospis jest obrazem opublikowanym przez szkołę. ' +
-          'W razie problemu z podglądem otwórz oficjalną stronę.</p>';
-      } else {
-        menuBody += '<p class="canteen-hint">Nie udało się odczytać obrazu jadłospisu. ' +
-          'Może znajdować się bezpośrednio na stronie szkoły.</p>';
-      }
-      if (!current) {
-        menuBody += '<p class="canteen-warning">Ta data już minęła. ' +
-          'Nie traktuj tego jadłospisu jako aktualnego.</p>';
-      }
-    } else {
-      menuBody = '<div class="empty">Brak możliwego do potwierdzenia jadłospisu na bieżący tydzień. ' +
-        'Szkoła może publikować go jako obraz na swojej stronie.</div>';
-    }
-    menuBody += '<div class="canteen-actions">' +
-      external(schoolUrl,'Zobacz jadłospis na stronie SP3') + '</div>';
-    sections.push('<section class="panel canteen-panel">' +
-      '<h2 class="section-title">Jadłospis</h2>' + menuBody + '</section>');
-
-    let paymentBody = '';
-    if (payment.verified && payment.current_amount && payment.current_deadline) {
-      paymentBody = '<div class="canteen-payment-amount"><strong>' +
-        esc(payment.current_amount) + '</strong><span>Termin: ' +
-        esc(payment.current_deadline) + '</span></div>';
-    } else {
-      paymentBody = '<p class="canteen-important">Aktualna kwota do zapłaty i termin nie zostały potwierdzone.</p>';
-    }
-    paymentBody += '<p>' + esc(payment.message ||
-      'Informacje o kwotach i płatnościach należy zweryfikować w komunikacie szkoły.') +
-      '</p>';
-    paymentBody += '<p class="canteen-hint">Nie wyświetlamy statusu „opłacono”, ' +
-      'ponieważ SP3 nie udostępnia tu indywidualnego salda ucznia.</p>';
-    paymentBody += '<div class="canteen-actions">' +
-      external(newsUrl,'Komunikaty o opłatach') +
-      external(schoolUrl,'Zasady stołówki') + '</div>';
-    sections.push('<section class="panel canteen-panel"><h2 class="section-title">Płatności za obiady</h2>' +
-      paymentBody + '</section>');
-
-    let notesBody = notes.length ?
-      '<div class="canteen-notices">' + notes.map(n => '<p>• ' + esc(n) + '</p>').join('') + '</div>' :
-      '<p class="canteen-hint">Aktualne zasady rejestracji i wydawania obiadów znajdziesz na stronie SP3.</p>';
-    const regUrl = data.registration_url;
-    notesBody += '<div class="canteen-actions">' +
-      (regUrl ? external(regUrl, 'Karta zapisu na obiady') : '') +
-      external(schoolUrl,'Dokumenty i informacje ze stołówki') + '</div>';
-    sections.push('<section class="panel canteen-panel"><h2 class="section-title">Informacje organizacyjne</h2>' +
-      notesBody + '</section>');
-    sections.push('<p class="canteen-footnote">Źródło: oficjalna strona SP3 Wrocław. ' +
-      'Sprawdzenie: ' + esc(formatDate(data.checked_at) || 'nieznane') +
-      '. Informacje publiczne, wspólne dla obu profili w Synergia Pocket; nie są danymi z Librusa.</p>');
-    return sections.join('');
+    data=await requestFn('/api/canteen/sp3');
+    byDate=new Map((Array.isArray(data.calendar?.days)?data.calendar.days:[])
+      .filter(d=>d && valid(d.date)).map(d=>[d.date,d]));
+    const payment=data.payment||{};
+    const notes=Array.isArray(data.notices)?data.notices:[];
+    const paymentBody=payment.verified && payment.current_amount && payment.current_deadline?
+      '<p class="canteen-important">'+esc(payment.current_amount)+' · Termin: '+esc(payment.current_deadline)+'</p>':
+      '<p class="canteen-important">Aktualna kwota do zapłaty i termin nie zostały potwierdzone.</p>';
+    return '<div class="content-head"><div><span class="eyebrow">SP3 WROCŁAW</span><h1>Stołówka</h1>'+
+      '<p>Wybierz dzień i zobacz, co będzie na obiad.</p></div></div>'+
+      '<section class="panel canteen-panel canteen-calendar-panel"><div id="canteen-calendar">'+renderCalendar()+'</div></section>'+
+      '<section class="panel canteen-panel"><h2 class="section-title">Płatności za obiady</h2>'+paymentBody+
+      '<p>'+esc(payment.message||'Brak aktualnego komunikatu o płatnościach.')+'</p>'+
+      '<p class="canteen-hint">Indywidualne saldo ucznia nie jest udostępnione w publicznym jadłospisie.</p></section>'+
+      '<section class="panel canteen-panel"><h2 class="section-title">Informacje organizacyjne</h2>'+
+      (notes.length?notes.map(n=>'<p>'+esc(n)+'</p>').join(''):'<p>Brak nowych informacji organizacyjnych.</p>')+'</section>'+
+      '<p class="canteen-footnote">Źródło: jadłospis podlinkowany przez SP3 Wrocław · Sprawdzenie: '+esc(stamp(data.calendar?.checked_at||data.checked_at))+'.</p>';
   }
-  window.SynergiaCanteenSP3 = {view};
+
+  document.addEventListener('click', event=>{
+    const root=document.getElementById('canteen-calendar');
+    if(!root || !root.contains(event.target)) return;
+    const button=event.target.closest('button');
+    if(!button) return;
+    if(button.dataset.canteenDay && valid(button.dataset.canteenDay)) selected=button.dataset.canteenDay;
+    else if(['week','month'].includes(button.dataset.canteenMode)) mode=button.dataset.canteenMode;
+    else if(button.dataset.canteenGo) selected=add(today(),button.dataset.canteenGo==='tomorrow'?1:0);
+    else if(button.dataset.canteenShift) {
+      const n=Number(button.dataset.canteenShift);
+      if(mode==='week') selected=add(selected,n*7);
+      else {const d=day(selected.slice(0,8)+'01');d.setUTCMonth(d.getUTCMonth()+n);selected=iso(d);}
+    } else return;
+    const focusKey=button.dataset.canteenDay?'day':button.dataset.canteenMode?'mode':button.dataset.canteenGo?'go':'shift';
+    const focusValue=button.getAttribute('data-canteen-'+focusKey);
+    root.innerHTML=renderCalendar();
+    const next=Array.from(root.querySelectorAll('button')).find(b=>b.getAttribute('data-canteen-'+focusKey)===focusValue);
+    next?.focus({preventScroll:true});
+  });
+  window.SynergiaCanteenSP3={view};
 })();
+

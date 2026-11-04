@@ -16,6 +16,9 @@ import time
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
+from zoneinfo import ZoneInfo
+
+from canteen_calendar import allowed_menu_url, load_calendar, saved_calendar, period_bounds
 
 from fastapi import HTTPException, Request as FastRequest
 from fastapi.responses import Response
@@ -37,7 +40,9 @@ _cache_lock = asyncio.Lock()
 _media_index: dict[str, str] = {}
 
 
-def _safe_url(url: str, *, image=False) -> bool:
+def _safe_url(url: str, *, image=False, menu=False) -> bool:
+    if menu:
+        return allowed_menu_url(url)
     try:
         u = urlsplit(url)
         host = (u.hostname or "").lower()
@@ -51,27 +56,29 @@ def _safe_url(url: str, *, image=False) -> bool:
 
 
 class _SafeRedirect(HTTPRedirectHandler):
-    def __init__(self, *, image=False):
+    def __init__(self, *, image=False, menu=False):
         super().__init__()
         self.image = image
+        self.menu = menu
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        if not _safe_url(newurl, image=self.image):
+        if not _safe_url(newurl, image=self.image, menu=self.menu):
             raise ValueError("Odrzucono przekierowanie poza dozwoloną domenę szkoły.")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _fetch(url: str, *, image=False) -> tuple[bytes, str]:
-    if not _safe_url(url, image=image):
+def _fetch(url: str, *, image=False, menu=False) -> tuple[bytes, str]:
+    if not _safe_url(url, image=image, menu=menu):
         raise ValueError("Niedozwolony adres źródła.")
     limit = MAX_IMAGE_BYTES if image else MAX_HTML_BYTES
-    opener = build_opener(_SafeRedirect(image=image))
+    opener = build_opener(_SafeRedirect(image=image, menu=menu))
     req = Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (compatible; SynergiaPocketCanteen/1.0)",
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://sp3wroc.edupage.org/",
         "Accept": "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.8" if image else "text/html,application/xhtml+xml",
     })
     with opener.open(req, timeout=8) as resp:
-        if not _safe_url(resp.url, image=image):
+        if not _safe_url(resp.url, image=image, menu=menu):
             raise ValueError("Otrzymano odpowiedź z niezaufanej domeny.")
         typ = resp.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
         if image:
@@ -192,8 +199,9 @@ def _find_menu(page: _Page, today: date) -> dict | None:
     image_url = pictures[0] if pictures else None
     return {
         "period": label,
+        "period_start": period_bounds(label)[0].isoformat() if period_bounds(label) else None,
         "period_end": end.isoformat(),
-        "is_current": today <= end and end <= today + timedelta(days=14),
+        "is_current": bool(period_bounds(label) and period_bounds(label)[0] <= today <= end),
         "image_available": bool(image_url),
         "_image_url": image_url,
     }
@@ -246,6 +254,7 @@ def _empty_state() -> dict:
         "menu": None,
         "notices": [],
         "registration_url": None,
+        "calendar": saved_calendar(),
         "payment": {
             "current_amount": None,
             "current_deadline": None,
@@ -263,13 +272,17 @@ def _get_public_data() -> dict:
         html = raw.decode("utf-8", "replace")
         if not re.search(r"stołówka|stolowka|jadłospis|obiady", html, re.I):
             raise ValueError("Strona szkoły nie zawiera rozpoznawalnej treści stołówki.")
-        parsed = _parse_page(html, date.today())
+        today = datetime.now(ZoneInfo("Europe/Warsaw")).date()
+        parsed = _parse_page(html, today)
         result["status"] = "ok"
         result["menu"] = parsed["menu"]
         result["notices"] = parsed["notices"]
         result["registration_url"] = parsed["registration_url"]
         if parsed["_image_url"] and parsed["menu"]["image_id"]:
             result["_image_url"] = parsed["_image_url"]
+        calendar = load_calendar(html, today, _fetch)
+        if calendar["days"]:
+            result["calendar"] = calendar
     except Exception as exc:
         LOG.warning("Publiczna strona stołówki SP3 chwilowo niedostępna: %s", type(exc).__name__)
     return result
@@ -283,6 +296,10 @@ async def _current():
         if _cache and time.monotonic() - _cache_at < CACHE_TTL:
             return _cache
         info = await asyncio.to_thread(_get_public_data)
+        previous = _cache.get("calendar", {})
+        if (info.get("calendar", {}).get("status") == "saved"
+                and previous.get("days") and previous.get("status") in ("ok", "partial", "stale")):
+            info["calendar"] = {**previous, "status": "stale"}
         img = info.pop("_image_url", None)
         _media_index = {info["menu"]["image_id"]: img} if img and info["menu"] else {}
         _cache = info
@@ -323,3 +340,4 @@ def install_canteen_routes(app, get_session, assert_session_current):
             "Cache-Control": "private, max-age=300",
             "X-Content-Type-Options": "nosniff",
         })
+

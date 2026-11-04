@@ -25,7 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pytest httpx
       - name: Check Python syntax
-        run: python -m compileall -q app.py session_store.py school_files.py message_attachments.py canteen_sp3.py tests
+        run: python -m compileall -q app.py session_store.py school_files.py message_attachments.py canteen_sp3.py canteen_calendar.py tests
       - name: Check frontend JavaScript syntax
         run: |
           for js in static/app.js static/messaging.js static/theme.js static/lesson-progress.js static/timetable-extras.js static/push.js static/school-files.js static/message-attachments.js static/canteen-sp3.js static/sw.js; do
@@ -59,3 +59,4 @@ jobs:
           docker logs synergia-smoke
           docker rm -f synergia-smoke
           exit 1
+
