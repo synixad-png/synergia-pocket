@@ -1,0 +1,15 @@
+/* Załączniki Wiadomości. Izolowane style (jasny i ciemny motyw). */
+.message-files-panel { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--line, rgba(130,145,165,.25)); min-width:0; }
+.message-files-title { font-size: 1rem; color: var(--ink, inherit); margin: 0 0 .8rem; }
+.message-files-list { display: grid; gap:.65rem; }
+.message-files-row { display:flex; align-items:center; gap:.7rem; min-width:0; border:1px solid var(--line, rgba(130,145,165,.28)); background:var(--surface, transparent); border-radius:12px; padding:.7rem; }
+.message-files-icon { flex:none; color:var(--blue2, #3158cb); font-size:1.4rem; }
+.message-files-info { flex:1; min-width:0; overflow-wrap:anywhere; color:var(--ink, inherit); font-weight:600; }
+.message-files-row button { flex:none; white-space:nowrap; }
+.message-files-row button:disabled { opacity:.6; cursor:progress; }
+.message-files-status { color:var(--soft-text, var(--muted, #64748b)); font-size:.86rem; margin:.9rem 0 0; line-height:1.5; overflow-wrap:anywhere; }
+@media (max-width: 520px) {
+  .message-files-row { flex-wrap:wrap; padding:.85rem; }
+  .message-files-info { min-width:calc(100% - 38px); }
+  .message-files-row button { width:100%; min-height:44px; }
+}

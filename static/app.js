@@ -209,7 +209,8 @@ async function openMessage(i) {
   try {
     const data=await request('/api/message/'+encodeURIComponent(msg.id)+'?mailbox='+encodeURIComponent(state.mailbox));
     if(epoch!==state.messageEpoch)return;
-    $('dialog-body').innerHTML=`<h2 id="dialog-title">${esc(data.subject||'Bez tematu')}</h2><small class="message-modal-meta">Od: ${esc(data.sender||'—')} · ${dateLabel(data.date)}</small><div class="body-content"><p class="message-body-text">${esc(data.body||'Brak treści.')}</p></div>${data.attachments?.length?`<small class="message-modal-attachments">Załączniki: ${data.attachments.map(esc).join(', ')} (pobieranie w kolejnej wersji)</small>`:''}`;
+    $('dialog-body').innerHTML=`<h2 id="dialog-title">${esc(data.subject||'Bez tematu')}</h2><small class="message-modal-meta">Od: ${esc(data.sender||'—')} · ${dateLabel(data.date)}</small><div class="body-content"><p class="message-body-text">${esc(data.body||'Brak treści.')}</p></div>${data.attachments?.length&&!data.attachment_files?.length?`<small class="message-modal-attachments">Załączniki: ${data.attachments.map(esc).join(', ')} (brak danych identyfikujących pliki)</small>`:''}`;
+    window.SynergiaMessageAttachments?.enhance($('dialog-body'), data, {profileId:state.user?.active_profile_id, messageId:data.id||msg.id, mailbox:state.mailbox});
     if (state.mailbox==='inbox' && !data.no_reply && state.user?.mode!=='demo') {
       const replyBtn=document.createElement('button');replyBtn.type='button';replyBtn.className='button button-primary';replyBtn.textContent='↩ Odpowiedz'; 
       const actions=document.createElement('div');actions.className='message-modal-actions';actions.append(replyBtn);$('dialog-body').append(actions);
@@ -217,7 +218,7 @@ async function openMessage(i) {
     }
   } catch(e) { if(epoch===state.messageEpoch) $('dialog-body').innerHTML=`<div class="error-box">${esc(errDetail(e))}</div>`; }
 }
-function closeDialog() { $('message-dialog').classList.add('hidden'); }
+function closeDialog() { window.SynergiaMessageAttachments?.clear(); $('message-dialog').classList.add('hidden'); }
 function initEvents() {
   // Przełącznik wyglądu jest dostępny również przed logowaniem.
   document.addEventListener('click', (event) => {

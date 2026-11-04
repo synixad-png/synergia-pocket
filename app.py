@@ -775,7 +775,10 @@ async def get_message(message_id: str, request: Request, mailbox: str = "inbox")
                 raise error(404, "Nie znaleziono wiadomości")
             result = {"id": val(msg, "id"), "subject": val(msg, "topic"),
                       "sender": val(msg, "sender_name"), "date": val(msg, "send_date"),
-                      "body": val(msg, "content"), "no_reply": bool(val(msg, "no_reply", False)), "attachments": [val(a, "filename") for a in val(msg, "attachments", [])]}
+                      "body": val(msg, "content"), "no_reply": bool(val(msg, "no_reply", False)),
+                      "attachments": [val(a, "filename") for a in val(msg, "attachments", [])],
+                      "attachment_files": [{"id": str(val(a, "id")), "filename": val(a, "filename") or "Załącznik"}
+                                           for a in val(msg, "attachments", []) if val(a, "id") is not None]}
         if not result:
             raise error(404, "Nie znaleziono wiadomości")
         profile.cache.pop(f"messages::{mailbox}", None)
@@ -789,6 +792,9 @@ install_message_routes(app, get_session, require_origin, assert_session_current)
 
 from school_files import install_school_file_routes
 install_school_file_routes(app, get_session, assert_session_current)
+
+from message_attachments import install_message_attachment_routes
+install_message_attachment_routes(app, get_session, assert_session_current)
 
 from push_features import install_push_routes
 PUSH_SERVICE = install_push_routes(app, STORE, SESSIONS, restore_cookie_session,
