@@ -43,6 +43,8 @@ jobs:
         run: python tests/browser_school_files_check.py
       - name: Check message attachment download in Chromium (mobile and desktop)
         run: python tests/browser_message_attachments_check.py
+      - name: Check SP3 canteen in Chromium (iPhone viewport and desktop)
+        run: python tests/browser_canteen_sp3_check.py
       - name: Build production Docker image and smoke test actual entrypoint
         run: |
           docker build --tag synergia-pocket:test .
