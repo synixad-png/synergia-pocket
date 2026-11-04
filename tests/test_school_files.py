@@ -154,6 +154,8 @@ def test_file_names_extensions_polish_chars_and_no_html():
     assert _clean_filename("../bad\r\nx.pdf") == "bad__x.pdf"
     assert _attachment_name(N(filename="Raport szkolny.doc", content_type="application/octet-stream",
                               content=b"%PDF-1.4"), {"name": "A"}) == "Raport szkolny.doc"
+    assert _attachment_name(N(filename="school-file-22", content_type="application/pdf", content=b"%PDF-1.4"),
+                              {"name": "Plan 2026.11"}) == "Plan 2026.11.pdf"
     assert _attachment_name(N(filename="school-file-22", content_type="blob/unknown",
                               content=b"\x00\x01"), {"name": "Nieznany dokument"}) == "Nieznany dokument.bin"
 
