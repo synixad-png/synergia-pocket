@@ -1,0 +1,23 @@
+/* Dokumenty szkoły — styl izolowany od pozostałych ekranów */
+.school-files-panel { min-width: 0; }
+.school-file-info { font-size: .87rem; line-height: 1.5; color: var(--text-muted, #64748b); margin: 0 0 1rem; }
+.school-file-demo { margin-bottom: 1rem; padding: .8rem 1rem; border-radius: 12px; background: rgba(37,99,235,.09); color: var(--text, inherit); font-weight: 600; }
+.school-files-list { display: grid; gap: .75rem; }
+.school-file-card { display: flex; align-items: center; gap: 1rem; padding: 1rem; border: 1px solid var(--border, rgba(130,145,165,.3)); border-radius: 14px; background: var(--surface, transparent); min-width: 0; }
+.school-file-symbol { display: flex; justify-content: center; align-items: center; flex: none; width: 44px; height: 44px; font-size: 1.5rem; border-radius: 12px; color: #2563eb; background: rgba(37,99,235,.1); }
+.school-file-meta { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.school-file-meta h3 { font-size: 1rem; font-weight: 700; line-height: 1.4; margin: 0 0 .3rem; color: var(--text, inherit); }
+.school-file-meta p { margin: 0; font-size: .86rem; color: var(--text-muted, #64748b); }
+.school-file-actions { flex: none; }
+.school-file-actions button { white-space: nowrap; }
+.school-file-actions button:disabled { cursor: progress; opacity: .65; }
+.school-file-disabled { font-size: .82rem; opacity: .75; }
+@media(max-width: 600px) {
+  .school-file-card { align-items: flex-start; flex-wrap: wrap; padding: .85rem; gap: .7rem; }
+  .school-file-symbol { width: 38px; height: 38px; }
+  .school-file-meta { min-width: calc(100% - 52px); }
+  .school-file-actions { width: 100%; padding-left: 0; }
+  .school-file-actions button { width: 100%; min-height: 44px; }
+}
+/* Dodatkowa pozycja menu nie może ukryć wylogowania na małym iPhonie. */
+@media(max-width: 900px) { .sidebar { overflow-y: auto; overscroll-behavior: contain; } }

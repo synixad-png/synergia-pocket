@@ -787,6 +787,9 @@ async def get_message(message_id: str, request: Request, mailbox: str = "inbox")
 from message_features import install_message_routes
 install_message_routes(app, get_session, require_origin, assert_session_current)
 
+from school_files import install_school_file_routes
+install_school_file_routes(app, get_session, assert_session_current)
+
 from push_features import install_push_routes
 PUSH_SERVICE = install_push_routes(app, STORE, SESSIONS, restore_cookie_session,
                                    get_session, require_origin, assert_session_current)

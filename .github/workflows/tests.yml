@@ -28,7 +28,7 @@ jobs:
         run: python -m compileall -q app.py session_store.py tests
       - name: Check frontend JavaScript syntax
         run: |
-          for js in static/app.js static/messaging.js static/theme.js static/lesson-progress.js static/timetable-extras.js static/push.js static/sw.js; do
+          for js in static/app.js static/messaging.js static/theme.js static/lesson-progress.js static/timetable-extras.js static/push.js static/school-files.js static/sw.js; do
             node --check "$js"
           done
       - name: Unit and regression tests (mock accounts only)
@@ -39,6 +39,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Check real dark/light text contrast on mobile and desktop
         run: python tests/browser_theme_check.py
+      - name: Check school document download in real Chromium (mobile and desktop)
+        run: python tests/browser_school_files_check.py
       - name: Build production Docker image and smoke test actual entrypoint
         run: |
           docker build --tag synergia-pocket:test .

@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const labels = { dashboard:'Oś czasu', timetable:'Plan lekcji', grades:'Oceny', attendance:'Frekwencja', agenda:'Terminarz', homework:'Zadania domowe', messages:'Wiadomości', notes:'Uwagi', announcements:'Ogłoszenia' };
+const labels = { dashboard:'Oś czasu', timetable:'Plan lekcji', grades:'Oceny', attendance:'Frekwencja', agenda:'Terminarz', homework:'Zadania domowe', messages:'Wiadomości', notes:'Uwagi', announcements:'Ogłoszenia', 'school-files':'Dokumenty szkoły' };
 const today = new Date();
 const state = { user:null, page:'dashboard', week: monday(today), mailbox:'inbox', loading:0, messageEpoch:0, messages:[], refresh:false, profileFormMode:'add', selectedDayIndex:Math.min(4,Math.max(0,(today.getDay()+6)%7)) };
 const plDate = new Intl.DateTimeFormat('pl-PL',{day:'numeric',month:'long',year:'numeric'});
@@ -121,6 +121,7 @@ async function navigate(page, opt={}) {
     else if(page==='messages') html=renderMessages(await section('messages',{mailbox:state.mailbox}));
     else if(page==='notes') html=renderNotes(await section('notes'));
     else if(page==='announcements') html=renderAnnouncements(await section('announcements'));
+    else if(page==='school-files') html=await window.SynergiaSchoolFiles.view(request);
     if(seq===state.loading) { $('content').innerHTML=html; document.querySelectorAll('.donut[data-pct]').forEach(el=>el.style.setProperty('--percentage',el.dataset.pct+'%')); if(page==='timetable') { window.SynergiaTimetable?.enhance(opt.timetableExtras?.plan,opt.timetableExtras?.grades); window.SynergiaLessonClock?.update(); } }
     return true;
   } catch(ex) {

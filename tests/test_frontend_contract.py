@@ -18,7 +18,7 @@ def test_js_dom_references_exist():
     parsed=IDs();parsed.feed(html)
     ids=set(re.findall(r"\$\('([a-zA-Z0-9_-]+)'\)",js))
     assert ids.issubset(parsed.ids), sorted(ids-parsed.ids)
-    expected={'dashboard','timetable','grades','attendance','agenda','homework','messages','notes','announcements'}
+    expected={'dashboard','timetable','grades','attendance','agenda','homework','messages','notes','announcements','school-files'}
     assert parsed.page_names==expected
 
 
