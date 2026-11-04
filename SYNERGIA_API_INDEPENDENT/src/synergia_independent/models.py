@@ -46,6 +46,21 @@ class Lesson:
     note: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class Contact:
+    account_id: str
+    name: str
+    role: str
+    subjects: tuple[str, ...]
+    available: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class SentMessage:
+    message_id: str | None
+    accepted: bool
+
+
 def decode_preview(value: Any) -> str:
     """A message preview may be truncated upstream, including mid UTF-8."""
     if not isinstance(value, str):
