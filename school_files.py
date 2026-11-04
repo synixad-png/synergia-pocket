@@ -108,7 +108,8 @@ def _attachment_name(attachment, record: dict) -> str:
     name = _clean_filename(suggested)
     # Nie nadpisuj już istniejącego rozszerzenia, nawet jeśli nie znamy formatu.
     last = name.rsplit(".", 1)
-    if len(last) == 1 or not 1 <= len(last[-1]) <= 12 or not re.fullmatch(r"[A-Za-z0-9]+", last[-1]):
+    if (len(last) == 1 or not 1 <= len(last[-1]) <= 12 or
+            not re.fullmatch(r"[A-Za-z0-9]+", last[-1]) or last[-1].isdigit()):
         name += _file_extension(bytes(_field(attachment, "content", b"") or b""),
                                 str(_field(attachment, "content_type", "") or ""))
     return name
