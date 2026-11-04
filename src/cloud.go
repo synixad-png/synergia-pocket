@@ -108,7 +108,7 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Method", 405)
 			return
 		}
-		serveJSON(w, 200, map[string]string{"status": "ok", "service": "synergia-pocket-own-api", "version": "web-0.15", "client": "own-go-v0.13"})
+		serveJSON(w, 200, map[string]string{"status": "ok", "service": "synergia-pocket-own-api", "version": "web-0.16", "client": "own-go-v0.13"})
 		return
 	}
 	origin, _ := url.Parse(c.origin)
@@ -307,7 +307,7 @@ func runCloud() error {
 			}
 		}
 	}()
-	log.Print("Synergia Pocket Test web-0.15 listening; own API client enabled")
+	log.Print("Synergia Pocket Test web-0.16 listening; own API client enabled")
 	e = server.ListenAndServe()
 	if errors.Is(e, http.ErrServerClosed) {
 		return nil

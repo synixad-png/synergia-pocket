@@ -135,8 +135,8 @@ button{cursor:pointer;font:inherit}button:disabled{opacity:.5;cursor:wait}.prima
   const data=await res.json().catch(()=>({error:'Nieprawidłowa odpowiedź lokalnego serwera.'}));
   if(!res.ok)throw Error(data.error||'Błąd operacji');return data;
  }
- function drawTable(section,records){
-  if(window.PocketGUI?.render(section,records))return;
+ function drawTable(section,records,metadata={}){
+  if(window.PocketGUI?.render(section,records,metadata))return;
   const specs=columns[section];const wrap=document.createElement('div');wrap.className='tablewrap';
   const table=document.createElement('table');table.className='datatable';
   const thead=document.createElement('thead'),trh=document.createElement('tr');
@@ -480,7 +480,7 @@ button{cursor:pointer;font:inherit}button:disabled{opacity:.5;cursor:wait}.prima
     if(section==='notices'){rows.sort((a,b)=>String(b.created||'').localeCompare(String(a.created||'')))}
     if(section==='freedays'){rows.sort((a,b)=>String(a.from||'').localeCompare(String(b.from||'')))}
     header(titles[section],section==='messages'?'Tylko lista i podglądy. Pełna wiadomość nie jest otwierana automatycznie.':section==='homework'?'Osobna lista HomeWorkAssignments. Załączniki pobierane wyłącznie po kliknięciu, limit 20 MB.':section==='notices'?'Tablica szkolna; tylko odczyt. Otwieranie nie oznacza ogłoszeń jako przeczytanych.':section==='freedays'?'Dni wolne szkoły i tylko klasy aktualnie wybranego ucznia; częściowe zwolnienia dotyczą wybranych lekcji.':'Dane pobrane bezpośrednio z Librus Synergia.');
-    if(rows.length)drawTable(section,rows);else $('view-body').innerHTML='<div class="blank">Nie ma danych do wyświetlenia. To może oznaczać pustą listę albo brak danych dla tego konta.</div>';
+    if(rows.length||section==='grades')drawTable(section,rows,body);else $('view-body').innerHTML='<div class="blank">Nie ma danych do wyświetlenia. To może oznaczać pustą listę albo brak danych dla tego konta.</div>';
     const warnings=Array.isArray(body.warnings)?body.warnings.filter(x=>typeof x==='string'&&x.length<250):[];
     status('Pobrano '+rows.length+' pozycji z modułu: '+titles[section]+'.'+(warnings.length?' Dane uzupełniające: '+warnings.join(' '):''),warnings.length?'':'success');
   }catch(err){$('view-body').textContent='Nie udało się pobrać danych. Sprawdź komunikat powyżej.';status(err.message,'error')}

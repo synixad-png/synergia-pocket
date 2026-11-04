@@ -17,3 +17,5 @@
 :root[data-theme=light] .gui .status.error{color:#af2d42}
 :root[data-theme=light] .lesson-badge.orange{color:#935900}
 .gui .grade-chip.green{background:#1f805a}.gui .grade-chip.blue{background:#1f78b0}.gui .grade-chip.yellow{background:#946600}.gui .grade-chip.red{background:#af3e53}
+
+.gui .grade-chip.long{font-size:13px;max-width:100%;width:auto;white-space:pre-wrap;text-align:left;overflow-wrap:anywhere;line-height:1.7;min-height:43px;padding:11px 13px}.grade-list{min-width:0}.grades-sources{font-size:12px;line-height:1.9;color:var(--muted);margin:0 0 20px}

@@ -736,11 +736,14 @@ func (a *LocalApp) routes() http.Handler {
 		defer c.mu.Unlock()
 		var result any
 		var warnings []string
+		var gradeSources []gradeSourceV16
 		switch r.URL.Query().Get("section") {
 		case "messages":
 			result, err = c.getMessages(r.Context())
 		case "grades":
-			result, err = c.getGrades(r.Context())
+			var grades gradesResultV16
+			grades, err = c.getAllGradesV16(r.Context())
+			result, warnings, gradeSources = grades.items, grades.warnings, grades.sources
 		case "timetable":
 			result, err = c.getTimetable(r.Context())
 		case "contacts":
@@ -782,7 +785,7 @@ func (a *LocalApp) routes() http.Handler {
 			serverError(w, err)
 			return
 		}
-		serveJSON(w, 200, map[string]any{"items": result, "warnings": warnings})
+		serveJSON(w, 200, map[string]any{"items": result, "warnings": warnings, "gradeSources": gradeSources})
 	})
 	// v0.8: isolated homework attachment endpoints; no other route is changed.
 	mux.HandleFunc("/api/homework/files", func(w http.ResponseWriter, r *http.Request) {
