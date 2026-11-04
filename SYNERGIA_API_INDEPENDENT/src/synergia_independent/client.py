@@ -7,6 +7,9 @@ No real account was accessed during development.
 from __future__ import annotations
 
 import asyncio
+import base64
+import html
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta, datetime
 import json
@@ -18,7 +21,7 @@ from zoneinfo import ZoneInfo
 import aiohttp
 from yarl import URL
 
-from .models import Grade, Lesson, MessagePreview, decode_preview, reference_names
+from .models import Contact, SentMessage, Grade, Lesson, MessagePreview, decode_preview, reference_names
 
 PORTAL = "https://synergia.librus.pl/loguj/portalRodzina"
 OAUTH = "https://api.librus.pl/OAuth/Authorization?client_id=46"
@@ -54,6 +57,14 @@ class MessagesUnavailable(SynergiaError):
 
 class ProtocolError(SynergiaError):
     pass
+
+
+class MessageWriteUncertain(SynergiaError):
+    def __init__(self, sent: bool | None):
+        self.sent = sent
+        msg = ('Librus odrzucił wysyłkę.' if sent is False else
+               'Brak potwierdzenia: wiadomość mogła zostać wysłana. Sprawdź Wysłane.')
+        super().__init__(msg)
 
 
 class HTTPError(SynergiaError):
@@ -141,6 +152,7 @@ class SynergiaClient:
 
     async def _send(self, method: str, url: str, *, data: dict | None = None,
                     params: dict | None = None, headers: dict | None = None,
+                    json_body: dict | None = None,
                     allowed: frozenset[str] = KNOWN_HOSTS) -> Response:
         if self._closed:
             raise SynergiaError("Klient został zamknięty.")
@@ -151,6 +163,8 @@ class SynergiaClient:
             opts["data"] = data
         if params is not None:
             opts["params"] = params
+        if json_body is not None:
+            opts["json"] = json_body
         if headers is not None:
             opts["headers"] = headers
         try:
@@ -238,7 +252,10 @@ class SynergiaClient:
             raise AuthenticationRequired("Wymagane ponowne logowanie do Synergii.")
         if (time.monotonic() - self._authenticated_at > 7200 and
                 time.monotonic() - self._refresh_failed_at > 1800):
-            await self.refresh()
+            async with self._lock:
+                if (time.monotonic() - self._authenticated_at > 7200 and
+                        time.monotonic() - self._refresh_failed_at > 1800):
+                    await self.refresh()
         if time.monotonic() - self._authenticated_at > 20 * 3600:
             raise AuthenticationRequired("Sesja wymaga ponownego zalogowania.")
 
@@ -332,7 +349,7 @@ class SynergiaClient:
             subject=str(item.get("topic") or ""),
             preview=decode_preview(item.get("content")),
             date=item.get("sendDate"),
-            unread=item.get("readDate") is None,
+            unread=mailbox not in ("outbox", "archive/outbox") and item.get("readDate") is None,
         ) for item in _items(items) if item.get("messageId") is not None]
 
     async def subjects(self) -> dict[str, str]:
@@ -406,6 +423,157 @@ class SynergiaClient:
                     ))
             result[day] = lessons
         return result
+
+
+    async def contacts(self) -> list[Contact]:
+        """School employees actually offered to this account."""
+        payload = await self._message_get("receivers/types",
+                                          params={"includeClass": "true"})
+        data = payload.get("data") if isinstance(payload, dict) else None
+        groups = data.get("list") if isinstance(data, dict) else None
+        if not isinstance(groups, list):
+            raise ProtocolError("Nie rozpoznano listy grup odbiorców.")
+        offered = []
+        for group in groups:
+            group_id = group.get("id") if isinstance(group, dict) else None
+            if isinstance(group_id, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", group_id):
+                offered.append((group_id, str(group.get("name") or group_id)))
+        if len(offered) > 40:
+            raise ProtocolError("Niespodziewanie długa lista grup pracowników.")
+        subjects_by_id: dict[str, list[str]] = {}
+        try:
+            subjects = await self._message_get("receivers/student-subjects")
+            items = subjects if isinstance(subjects, list) else subjects.get("data", [])
+            for item in _items(items):
+                key = item.get("teacherIdentifier")
+                subject = item.get("subject")
+                if key is not None and isinstance(subject, str) and subject:
+                    subjects_by_id.setdefault(str(key), []).append(subject)
+        except HTTPError as exc:
+            if exc.status not in (403, 404):
+                raise
+        contacts = {}
+        for group_id, role in offered:
+            try:
+                group_payload = await self._message_get(
+                    "receivers/groups/school-employees",
+                    params={"receiverType": group_id})
+            except HTTPError as exc:
+                if exc.status in (403, 404):
+                    continue
+                raise
+            entries = group_payload.get("receivers") if isinstance(group_payload, dict) else []
+            for item in _items(entries):
+                key = item.get("accountId")
+                if key is None or not str(key).isdigit():
+                    continue
+                availability = item.get("availabilityStatus")
+                available = (availability.get("isAvailable") if isinstance(availability, dict)
+                             else None)
+                contact = Contact(
+                    account_id=str(key), name=str(item.get("label") or ""),
+                    role=role, subjects=tuple(dict.fromkeys(subjects_by_id.get(str(key), []))),
+                    available=available if isinstance(available, bool) else None)
+                if contact.account_id not in contacts:
+                    contacts[contact.account_id] = contact
+        return list(contacts.values())
+
+    async def full_message(self, message_id: str, *, confirm_mark_read: bool = False) -> dict:
+        """Explicit read action. Upstream may mark this message as read."""
+        if not confirm_mark_read:
+            raise ValueError("Otworzenie pełnej wiadomości może oznaczyć ją jako przeczytaną.")
+        if not str(message_id).isdigit():
+            raise ValueError("Nieprawidłowy identyfikator wiadomości.")
+        result = await self._message_get(f"inbox/messages/{message_id}")
+        value = result.get("data") if isinstance(result, dict) else None
+        if not isinstance(value, dict):
+            raise ProtocolError("Nieznany format pełnej wiadomości.")
+        detail = dict(value)
+        detail["decoded_content"] = decode_preview(value.get("Message"))
+        return detail
+
+    async def _send_once(self, recipient_ids: list[str], topic: str, body: str,
+                         *, original_id: str | None = None) -> SentMessage:
+        """One POST only, even after a timeout / ambiguous failure."""
+        if not recipient_ids or len(recipient_ids) > 50:
+            raise ValueError("Wymagany jest od 1 do 50 odbiorców.")
+        if len(set(recipient_ids)) != len(recipient_ids) or any(
+                not str(x).isdigit() for x in recipient_ids):
+            raise ValueError("Odbiorcy muszą mieć unikatowe numery kont.")
+        if not 1 <= len(topic.strip()) <= 200 or not 1 <= len(body.strip()) <= 10000:
+            raise ValueError("Temat (1–200) i treść (1–10000) są wymagane.")
+        # Confirm that the messages session is valid before an irreversible POST.
+        await self._message_get("me")
+        encoded = {
+            "receivers": {"schoolReceivers": [
+                {"accountId": str(value)} for value in recipient_ids]},
+            "topic": base64.b64encode(topic.strip().encode("utf-8")).decode("ascii"),
+            "content": base64.b64encode(
+                html.escape(body.strip().replace("\r\n", "\n"), quote=False)
+                .encode("utf-8")).decode("ascii"),
+            "storageId": None, "category": "normal",
+        }
+        path = "messages"
+        if original_id is not None:
+            if not original_id.isdigit():
+                raise ValueError("Nieprawidłowy identyfikator oryginalnej wiadomości.")
+            encoded["originalMessageId"] = int(original_id)
+            path = "messages/reply"
+        try:
+            reply = await self._send("POST", MESSAGE_API + "/" + path,
+                                     json_body=encoded)
+        except NetworkError as exc:
+            raise MessageWriteUncertain(sent=None) from exc
+        if 400 <= reply.status < 500:
+            raise MessageWriteUncertain(sent=False)
+        if reply.status >= 500:
+            raise MessageWriteUncertain(sent=None)
+        if reply.status < 200:
+            raise MessageWriteUncertain(sent=None)
+        try:
+            parsed = json.loads(reply.text) if reply.text.strip() else {}
+        except (TypeError, ValueError):
+            parsed = {}  # A successful reply can return no JSON body.
+        if not isinstance(parsed, dict):
+            parsed = {}
+        inner = parsed.get("data")
+        inner = inner if isinstance(inner, dict) else {}
+        status = inner.get("status") or parsed.get("status")
+        if parsed.get("errors") or (isinstance(status, str) and
+                                    status.casefold() in {"failed", "error", "rejected"}):
+            raise MessageWriteUncertain(sent=None)
+        message_id = inner.get("messageId", parsed.get("messageId"))
+        return SentMessage(message_id=str(message_id) if message_id is not None else None,
+                           accepted=True)
+
+    async def send_message(self, recipient_ids: list[str], topic: str, text: str,
+                           *, confirm: bool = False) -> SentMessage:
+        """Explicit opt-in only. Never retry a POST automatically."""
+        if not confirm:
+            raise ValueError("Ustaw confirm=True po świadomym zatwierdzeniu wiadomości.")
+        # Ensure all recipients are people actually offered by the school.
+        allowed = {contact.account_id for contact in await self.contacts()}
+        ids = [str(x) for x in recipient_ids]
+        if not set(ids).issubset(allowed) or not ids:
+            raise ValueError("Odbiorca nie występuje na liście kontaktów szkoły.")
+        return await self._send_once(ids, topic, text)
+
+    async def reply_to_message(self, message_id: str, text: str,
+                               *, confirm: bool = False) -> SentMessage:
+        """User opt-in: opening original marks it as read, then one POST."""
+        if not confirm:
+            raise ValueError("Odpowiedź wymaga confirm=True.")
+        original = await self.full_message(message_id, confirm_mark_read=True)
+        if bool(original.get("noReply")):
+            raise ValueError("Nie można odpowiedzieć na tę wiadomość.")
+        sender_id = str(original.get("senderId") or "")
+        if not sender_id.isdigit():
+            raise ProtocolError("Nie znamy numeru konta nadawcy.")
+        subject = str(original.get("topic") or "Wiadomość")
+        if not subject.casefold().startswith("re:"):
+            subject = "Re: " + subject
+        return await self._send_once([sender_id], subject[:200], text,
+                                     original_id=str(message_id))
 
     async def attendance(self) -> dict[str, Any]:
         """Raw gateway data; parsing of detailed statuses is a future module."""
