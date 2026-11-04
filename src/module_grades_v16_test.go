@@ -80,8 +80,32 @@ func TestV16PartialSourceUsesCurrentStudentIdentityAndPreservesZero(t *testing.T
 	m.add("GET", dataBase+"/Auth/UserInfo/LID-AUTH-USER-parent", record{200, `{"IdentifierOfStudentAssignedWithUser":"LID-AUTH-USER-child"}`, "", ""})
 	m.add("POST", dataBase+"/Auth/DescriptiveGradingSystem/PartialGrades/Student/LID-AUTH-USER-child", record{200, `{"data":[{"gradeId":1,"subjectId":"LID-SUBJECT-1","scaleValue":{"value":0},"area":{"name":"Czytanie"}}],"pagination":{"page":1,"limit":20,"total":1}}`, "", ""})
 	m.add("GET", dataBase+"/Auth/Subjects", record{200, `{"data":[{"identifier":"LID-SUBJECT-1","numericIdentifier":2,"name":"Język polski"}]}`, "", ""})
-	rows, _, e := c.gradePartialV16(context.Background())
+	rows, _, _, e := c.gradePartialV16(context.Background())
 	if e != nil || len(rows) != 1 || rows[0]["value"] != "0" || rows[0]["subject"] != "Język polski" {
 		t.Fatal(e, rows)
+	}
+}
+
+func TestV16PartialPaginationCollectsVerifiedPages(t *testing.T) {
+	c, m := fakeAccount()
+	target := dataBase + "/Auth/DescriptiveGradingSystem/PartialGrades/Student/LID-AUTH-USER-child"
+	m.add("POST", target, record{200, `{"data":[{"gradeId":1}],"pagination":{"page":1,"limit":1,"total":3}}`, "", ""})
+	m.add("POST", target+"?limit=1&page=2", record{200, `{"data":[{"gradeId":2}],"pagination":{"page":2,"limit":1,"total":3}}`, "", ""})
+	m.add("POST", target+"?limit=1&page=3", record{200, `{"data":[{"gradeId":3}],"pagination":{"page":3,"limit":1,"total":3}}`, "", ""})
+	rows, warning, e := c.gradePartialPagesV16(context.Background(), target)
+	if e != nil || len(rows) != 3 || warning != "" {
+		t.Fatal(e, len(rows), warning)
+	}
+}
+func TestV16PartialPaginationRejectsRepeatedOrFailedPages(t *testing.T) {
+	for _, response := range []record{{200, `{"data":[{"gradeId":1}],"pagination":{"page":1,"limit":1,"total":3}}`, "", ""}, {503, `{"PRIVATE":"content"}`, "", ""}} {
+		c, m := fakeAccount()
+		target := dataBase + "/Auth/DescriptiveGradingSystem/PartialGrades/Student/LID-AUTH-USER-child"
+		m.add("POST", target, record{200, `{"data":[{"gradeId":1}],"pagination":{"page":1,"limit":1,"total":3}}`, "", ""})
+		m.add("POST", target+"?limit=1&page=2", response)
+		rows, warning, e := c.gradePartialPagesV16(context.Background(), target)
+		if e != nil || len(rows) != 1 || !strings.Contains(warning, "1 z 3") || strings.Contains(warning, "PRIVATE") {
+			t.Fatal(e, len(rows), warning)
+		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -121,7 +122,7 @@ func (c *APIClient) getAllGradesV16(parent context.Context) (gradesResultV16, er
 		}
 		result.sources = append(result.sources, gradeSourceV16{ID: def.id, Label: def.label, State: state})
 	}
-	partial, partialSubjects, partialErr := c.gradePartialV16(ctx)
+	partial, partialSubjects, partialWarning, partialErr := c.gradePartialV16(ctx)
 	partialState := "ok"
 	if partialErr != nil {
 		partialState = "failed"
@@ -165,6 +166,23 @@ func (c *APIClient) getAllGradesV16(parent context.Context) (gradesResultV16, er
 		}
 		if data, e := c.gradeReadV16(ctx, path); e == nil {
 			categories[source] = gradeDictionaryV16(data, key)
+		}
+	}
+	commentLookups := map[string]map[string]map[string]any{}
+	for source, path := range map[string]string{"classic": "Grades/Comments", "descriptive": "DescriptiveGrades/Comments"} {
+		needed := false
+		for _, row := range lists[source] {
+			if len(arr(row["Comments"])) > 0 {
+				needed = true
+				break
+			}
+		}
+		if needed {
+			if data, e := c.gradeReadV16(ctx, path); e == nil {
+				commentLookups[source] = gradeDictionaryV16(data, "Comments")
+			} else {
+				result.warnings = append(result.warnings, "Nie udało się odczytać części komentarzy do ocen. Same oceny zachowano.")
+			}
 		}
 	}
 	seen := map[string]bool{}
@@ -212,6 +230,7 @@ func (c *APIClient) getAllGradesV16(parent context.Context) (gradesResultV16, er
 				date = str(m["Date"])
 			}
 			row := map[string]any{"id": id, "source": def.id, "sourceLabel": def.label, "value": gradeValueV16(m, def.id), "date": date, "subject": subject, "subjectId": subjectID, "category": categoryName, "semester": m["Semester"], "kind": kind, "weight": category["Weight"]}
+			row["comments"] = gradeCommentsV16(m["Comments"], commentLookups[def.id])
 			if def.id == "point" {
 				row["points"], row["maxPoints"] = m["GradeValue"], category["ValueTo"]
 			}
@@ -226,8 +245,9 @@ func (c *APIClient) getAllGradesV16(parent context.Context) (gradesResultV16, er
 		}
 		result.items = append(result.items, row)
 	}
-	if len(partial) > 0 {
-		result.warnings = append(result.warnings, "Nowe oceny opisowe: odebrano pierwszą listę; kompletność tego źródła wymaga sprawdzenia.")
+	if partialWarning != "" {
+		result.warnings = append(result.warnings, partialWarning)
+		result.sources[4].State = "partial"
 	}
 	for i := range result.sources {
 		if result.sources[i].State == "ok" && result.sources[i].Count == 0 {
@@ -239,12 +259,101 @@ func (c *APIClient) getAllGradesV16(parent context.Context) (gradesResultV16, er
 
 var gradeLIDV16 = regexp.MustCompile(`^[A-Za-z0-9_-]{1,160}$`)
 
-func (c *APIClient) gradePartialV16(ctx context.Context) ([]map[string]any, map[string]string, error) {
+func (c *APIClient) gradePartialPostV16(parent context.Context, target string) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(parent, 7*time.Second)
+	defer cancel()
+	if err := c.ensure(ctx); err != nil {
+		return nil, err
+	}
+	response, body, err := c.request(ctx, http.MethodPost, target, strings.NewReader("{}"), map[string]string{"Content-Type": "application/json"})
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode == 401 && c.refreshSession(ctx) {
+		response, body, err = c.request(ctx, http.MethodPost, target, strings.NewReader("{}"), map[string]string{"Content-Type": "application/json"})
+		if err != nil {
+			return nil, err
+		}
+	}
+	if response.StatusCode >= 400 {
+		return nil, ProtocolError{"Oceny: HTTP " + strconv.Itoa(response.StatusCode) + "."}
+	}
+	return parseJSON(body, "Nowe oceny opisowe")
+}
+
+// Continue only when the endpoint confirms the page number and stable total.
+// An ignored query or a repeated page preserves collected entries and reports
+// the limitation instead of duplicating them or claiming completeness.
+func (c *APIClient) gradePartialPagesV16(ctx context.Context, target string) ([]any, string, error) {
+	out := []any{}
+	seen := map[string]bool{}
+	expected, limit, total := -1, 0, -1
+	warning := func(reason string) ([]any, string, error) {
+		return out, "Nowe opisowe: odczytano " + strconv.Itoa(len(out)) + " z " + strconv.Itoa(total) + " wpisów; " + reason + ".", nil
+	}
+	for step := 0; step < 100; step++ {
+		address := target
+		if expected >= 0 {
+			address += "?" + url.Values{"page": {strconv.Itoa(expected)}, "limit": {strconv.Itoa(limit)}}.Encode()
+		}
+		payload, err := c.gradePartialPostV16(ctx, address)
+		if err != nil {
+			if total < 0 {
+				return out, "", err
+			}
+			return warning("nie udało się pobrać dalszej strony")
+		}
+		rows, ok := payload["data"].([]any)
+		if !ok {
+			if total >= 0 {
+				return warning("dalsza strona ma nieznany format")
+			}
+			return out, "", ProtocolError{"Oceny: nieznany format nowego systemu."}
+		}
+		meta := obj(payload["pagination"])
+		page, ep := strconv.Atoi(str(meta["page"]))
+		size, es := strconv.Atoi(str(meta["limit"]))
+		count, ec := strconv.Atoi(str(meta["total"]))
+		valid := ep == nil && es == nil && ec == nil && page >= 0 && size > 0 && size <= 5000 && count >= len(rows) && count <= 20000
+		if expected >= 0 && (!valid || page != expected || count != total) {
+			return warning("serwer nie potwierdził dalszej strony")
+		}
+		before := len(out)
+		for _, v := range rows {
+			row, ok := v.(map[string]any)
+			if !ok || row["gradeId"] == nil {
+				return out, "", ProtocolError{"Oceny: nieznany wpis nowego systemu."}
+			}
+			id := str(row["gradeId"])
+			if !seen[id] {
+				seen[id] = true
+				out = append(out, row)
+			}
+		}
+		if !valid {
+			if len(out) > 0 {
+				return out, "Nowe opisowe: serwer nie udostępnił informacji o kompletności listy.", nil
+			}
+			return out, "", nil
+		}
+		total, limit = count, size
+		if len(out) >= total {
+			return out, "", nil
+		}
+		if len(out) == before {
+			return warning("dalsza strona nie zawiera nowych danych")
+		}
+		expected = page + 1
+	}
+	return warning("przerwano nadmiernie długie stronicowanie")
+}
+
+func (c *APIClient) gradePartialV16(ctx context.Context) ([]map[string]any, map[string]string, string, error) {
 	empty := []map[string]any{}
 	subjectNames := map[string]string{}
 	token, err := c.gradeReadV16(ctx, "Auth/TokenInfo")
 	if err != nil {
-		return empty, subjectNames, err
+		return empty, subjectNames, "", err
 	}
 	user := ""
 	for _, key := range []string{"UserIdentifier", "userIdentifier", "Identifier", "identifier"} {
@@ -254,51 +363,29 @@ func (c *APIClient) gradePartialV16(ctx context.Context) ([]map[string]any, map[
 		}
 	}
 	if !gradeLIDV16.MatchString(user) {
-		return empty, subjectNames, ProtocolError{"Oceny: nieznany format identyfikatora konta."}
+		return empty, subjectNames, "", ProtocolError{"Oceny: nieznany format identyfikatora konta."}
 	}
 	info, err := c.gradeReadV16(ctx, "Auth/UserInfo/"+user)
 	if err != nil {
-		return empty, subjectNames, err
+		return empty, subjectNames, "", err
 	}
 	if nested, ok := info["UserInfo"].(map[string]any); ok {
 		info = nested
 	}
 	student := str(info["IdentifierOfStudentAssignedWithUser"])
 	if student == "" {
-		return empty, subjectNames, ProtocolError{"Oceny: nie udostępniono identyfikatora ucznia."}
+		return empty, subjectNames, "", ProtocolError{"Oceny: nie udostępniono identyfikatora ucznia."}
 	}
 	if !gradeLIDV16.MatchString(student) {
-		return empty, subjectNames, ProtocolError{"Oceny: nieznany format identyfikatora ucznia."}
-	}
-	child, cancel := context.WithTimeout(ctx, 7*time.Second)
-	defer cancel()
-	if err = c.ensure(child); err != nil {
-		return empty, subjectNames, err
+		return empty, subjectNames, "", ProtocolError{"Oceny: nieznany format identyfikatora ucznia."}
 	}
 	target := dataBase + "/Auth/DescriptiveGradingSystem/PartialGrades/Student/" + student
-	response, body, err := c.request(child, http.MethodPost, target, strings.NewReader("{}"), map[string]string{"Content-Type": "application/json"})
+	raw, warning, err := c.gradePartialPagesV16(ctx, target)
 	if err != nil {
-		return empty, subjectNames, err
-	}
-	if response.StatusCode == 401 && c.refreshSession(child) {
-		response, body, err = c.request(child, http.MethodPost, target, strings.NewReader("{}"), map[string]string{"Content-Type": "application/json"})
-		if err != nil {
-			return empty, subjectNames, err
-		}
-	}
-	if response.StatusCode >= 400 {
-		return empty, subjectNames, ProtocolError{"Oceny: HTTP " + strconv.Itoa(response.StatusCode) + "."}
-	}
-	payload, err := parseJSON(body, "Nowe oceny opisowe")
-	if err != nil {
-		return empty, subjectNames, err
-	}
-	raw, ok := payload["data"].([]any)
-	if !ok {
-		return empty, subjectNames, ProtocolError{"Oceny: nieznany format nowego systemu."}
+		return empty, subjectNames, "", err
 	}
 	if len(raw) == 0 {
-		return empty, subjectNames, nil
+		return empty, subjectNames, warning, nil
 	}
 	authSubjects, _ := c.gradeReadV16(ctx, "Auth/Subjects")
 	numeric := map[string]string{}
@@ -315,7 +402,7 @@ func (c *APIClient) gradePartialV16(ctx context.Context) ([]map[string]any, map[
 	for _, v := range raw {
 		m, ok := v.(map[string]any)
 		if !ok || m["gradeId"] == nil {
-			return empty, subjectNames, ProtocolError{"Oceny: nieznany wpis nowego systemu."}
+			return empty, subjectNames, "", ProtocolError{"Oceny: nieznany wpis nowego systemu."}
 		}
 		id := str(m["gradeId"])
 		if seen[id] {
@@ -344,5 +431,5 @@ func (c *APIClient) gradePartialV16(ctx context.Context) ([]map[string]any, map[
 		}
 		empty = append(empty, map[string]any{"id": id, "source": "partial", "sourceLabel": "Nowe opisowe", "value": value, "subjectId": sid, "subject": subject, "category": obj(m["area"])["name"], "date": date, "semester": m["semester"], "comments": comments})
 	}
-	return empty, subjectNames, nil
+	return empty, subjectNames, warning, nil
 }
