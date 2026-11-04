@@ -23,7 +23,7 @@ Aktualny podgląd `PODGLAD_MOBILNY_OFFLINE.html` znajduje się w paczce wydania 
 
 ## ZAKŁADKI
 
-Pulpit, oceny, plan lekcji, frekwencja, terminarz, zadania domowe, wiadomości, uwagi, ogłoszenia. W trybie online jest to klient *tylko do odczytu*. Sam odczyt pełnej wiadomości może oznaczyć ją jako przeczytaną w Librus.
+Pulpit, oceny, plan lekcji, frekwencja, terminarz, zadania domowe, wiadomości, uwagi, ogłoszenia. Dane o ocenach, planie i frekwencji są tylko do odczytu. Moduł **Wiadomości** umożliwia świadomą wysyłkę oraz odpowiedź z dwóch niezależnych profili. Sam odczyt pełnej wiadomości może oznaczyć ją jako przeczytaną w Librus.
 
 ## BEZPIECZEŃSTWO I OGRANICZENIA
 
@@ -83,3 +83,13 @@ To nie jest produkcyjny audyt bezpieczeństwa ani potwierdzenie logowania z praw
 ### Wdrożenie 03.11.2026
 
 Instancja darmowego Render Key Value `synergia-pocket-sessions` została utworzona w regionie Frankfurt oraz podłączona do web service `synergia-pocket` przez zmienne środowiskowe hostingu. Sekrety nie są zapisywane w repozytorium. Free Key Value przechowuje stan wyłącznie w pamięci; restart samego Redis oznacza utratę zapisanych sesji. Sprawdzaj w logach startowych komunikat `Magazyn sesji Redis: PING i zapis/odczyt OK`. Bez sprawdzenia prawdziwego konta Librusa nie wolno uznawać 100% bezobsługowego wznawiania logowania za potwierdzone.
+
+## WIADOMOŚCI I KONTAKTY PRACOWNIKÓW SZKOŁY
+
+- Wybierz profil córki, następnie **Wiadomości → Napisz wiadomość**.
+- Wyszukaj pracownika dostępnego na liście odbiorców danego konta. Opisy ról i przedmiotów pochodzą z API Librusa. Dla wychowawcy pokazujemy klasę danego dziecka. Nie zgadujemy pozostałych klas nauczycieli, których API nie udostępnia.
+- Po wpisaniu tematu i treści wybierz **Sprawdź przed wysłaniem**, potem świadomie potwierdź przyciskiem **Wyślij wiadomość**. Sukces oznacza akceptację przez Librus, nie odczytanie przez odbiorcę.
+- Aby odpowiedzieć, otwórz odebraną wiadomość i wybierz **Odpowiedz**. Gdy Librus zabrania odpowiedzi, przycisk jest ukryty.
+- Wysyłka nie jest ponawiana automatycznie. Po błędzie bez potwierdzenia najpierw sprawdź **Wysłane**. Limit: 10 prób na godzinę na profil; blokada powtórzenia identyfikatora żądania w pamięci procesu.
+- Lista kontaktów może być inna dla każdej córki. W trybie demo nic nie jest wysyłane. Brak wysyłania załączników i obsługi DW/UDW.
+- Testy zostały wykonane na symulowanym API. Nie potwierdzono jeszcze prawdziwej wysyłki z konta Synergia ani pełnego audytu bezpieczeństwa.
