@@ -66,3 +66,55 @@ def test_partial_grades_are_included_with_explicit_completeness_warning():
     row = next(r for g in result["subjects"] for r in g["grades"] if r["source"] == "partial")
     assert row["value"] == "0"
     assert any("pierwszą listę" in warning for warning in result["warnings"])
+
+
+def test_verified_partial_pagination_collects_later_grades():
+    from grade_features import collect_partial_pages
+    calls = []
+    async def fetch(page, limit):
+        calls.append((page, limit))
+        n = page or 1
+        return {"data": [{"gradeId": n, "scaleValue": {"value": "5"}}],
+                "pagination": {"page": n, "limit": 1, "total": 3}}
+    result = asyncio.run(collect_partial_pages(fetch))
+    assert [row["gradeId"] for row in result] == [1, 2, 3]
+    assert calls == [(None, None), (2, 1), (3, 1)]
+    assert result.warning == ""
+
+
+def test_ignored_pagination_is_not_counted_twice_or_claimed_complete():
+    from grade_features import collect_partial_pages
+    async def fetch(page, limit):
+        return {"data": [{"gradeId": 1}], "pagination": {"page": 1, "limit": 1, "total": 3}}
+    result = asyncio.run(collect_partial_pages(fetch))
+    assert len(result) == 1 and "nie potwierdził" in result.warning
+
+
+def test_later_page_failure_keeps_already_collected_grades():
+    from grade_features import collect_partial_pages
+    async def fetch(page, limit):
+        if page: raise RuntimeError("PRIVATE")
+        return {"data": [{"gradeId": 1}], "pagination": {"page": 1, "limit": 1, "total": 3}}
+    result = asyncio.run(collect_partial_pages(fetch))
+    assert len(result) == 1 and "1 z 3" in result.warning and "PRIVATE" not in result.warning
+
+
+def test_sdk_adapter_keeps_pagination_metadata_and_current_child():
+    from urllib.parse import urlsplit, parse_qs
+    calls = []
+    class Low:
+        async def _async_request_url(self, url, method, json_body):
+            calls.append((url, method, json_body))
+            n = int(parse_qs(urlsplit(url).query).get("page", [1])[0])
+            return {"data": [{"gradeId": n, "subjectId": 1, "scaleValue": {"value": 0}, "area": {"name": "Czytanie"}}],
+                    "pagination": {"page": n, "limit": 1, "total": 2}}
+    class Client(AllGrades):
+        client = Low()
+        async def student_identifier(self): return "LID-AUTH-USER-child"
+        async def _call(self, fetch): return await fetch()
+        async def _subjects_by_lid(self): return {}
+    result = asyncio.run(collect_grades(Client()))
+    assert result["count"] == 125 and not result["warnings"]
+    assert len(calls) == 2
+    assert all(urlsplit(url).path.endswith("/Student/LID-AUTH-USER-child") and method == "POST" and body == {}
+               for url, method, body in calls)
