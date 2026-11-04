@@ -1,0 +1,40 @@
+name: Independent Synergia API — isolated tests
+
+on:
+  push:
+    branches:
+      - feature/independent-synergia-api
+    paths:
+      - "SYNERGIA_API_INDEPENDENT/**"
+      - ".github/workflows/independent-api.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ONLY the independent package and its test dependencies
+        run: |
+          python -m pip install -e "./SYNERGIA_API_INDEPENDENT[test]"
+      - name: Check syntax
+        run: |
+          python -m compileall -q SYNERGIA_API_INDEPENDENT/src SYNERGIA_API_INDEPENDENT/tests
+      - name: Mock-protocol tests — no live school accounts
+        run: |
+          cd SYNERGIA_API_INDEPENDENT
+          python -m pytest -q
+      - name: Verify no production SDK dependency
+        run: |
+          if grep -R 'from librus_synergia\|import librus_synergia' \
+              SYNERGIA_API_INDEPENDENT/src; then
+            echo "Independent client unexpectedly imports old SDK" >&2
+            exit 1
+          fi
