@@ -34,10 +34,25 @@
 .canteen-dish-number{display:flex;align-items:center;justify-content:center;flex:0 0 30px;height:30px;border-radius:10px;background:var(--bg);font-size:.8rem;color:var(--ink)}
 .canteen-hint{font-size:.85rem}
 .canteen-important{font-weight:750;color:var(--ink)!important}
+.canteen-payment-card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:1rem;margin:.8rem 0;min-width:0}
+.canteen-payment-heading{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.canteen-payment-heading h3{margin:0;font-size:1.15rem;text-transform:capitalize;color:var(--ink)}
+.canteen-payment-scope{font-weight:650;margin:.6rem 0!important}
+.canteen-payment-fields{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.canteen-payment-fields div{min-width:0}
+.canteen-payment-fields dt{font-size:.82rem;color:var(--soft-text,var(--ink));margin-bottom:.25rem}
+.canteen-payment-fields dd{font-size:1.05rem;font-weight:650;color:var(--ink);margin:0;overflow-wrap:anywhere;line-height:1.6}
+.canteen-payment-fields div:first-child dd{font-size:1.35rem}
+.canteen-payment-source{font-size:.78rem;overflow-wrap:anywhere}
+.canteen-payment-archive{margin:1rem 0}
+.canteen-payment-archive summary{cursor:pointer;color:var(--ink);font-weight:700;padding:.8rem 0;min-height:44px}
+.canteen-payment-archive summary:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+.canteen-payment-archive .canteen-payment-card{background:var(--bg)}
 .canteen-warning{border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:.9rem 1rem;line-height:1.6;border-radius:14px;margin-bottom:1rem}
 .canteen-empty{text-align:center;padding:1.5rem .5rem;color:var(--ink)}
 .canteen-empty>span{display:block;font-size:2rem;color:var(--blue);margin-bottom:1rem}
 .canteen-empty strong{display:block;font-size:1.1rem}
 .canteen-footnote{font-size:.8rem;line-height:1.55;color:var(--soft-text,var(--muted));margin:0 0 1.2rem}
 @media(max-width:850px){.canteen-calendar-layout{grid-template-columns:1fr}.canteen-picker{max-width:none}}
+@media(max-width:620px){.canteen-payment-fields{grid-template-columns:1fr}}
 @media(max-width:420px){.canteen-picker{padding:.55rem}.canteen-daily{padding:1rem}.canteen-dates,.canteen-weekdays{gap:1px}.canteen-month-nav strong{font-size:.83rem}.canteen-dishes li{font-size:1rem}.canteen-date{min-height:44px}}

@@ -113,6 +113,8 @@ def test_public_menu_does_not_call_librus(monkeypatch):
     calls = []
     def school_get(url, *, image=False):
         calls.append((url,image))
+        if url.startswith(canteen.NEWS_URL):
+            return '<html>Archiwum Aktualności</html>'.encode(), 'text/html'
         assert url == canteen.SCHOOL_URL
         return _page(end).encode("utf-8"), "text/html"
     monkeypatch.setattr(canteen,"_fetch",school_get)
@@ -128,10 +130,11 @@ def test_public_menu_does_not_call_librus(monkeypatch):
             result=client.get("/api/canteen/sp3")
             assert result.status_code == 200
             assert result.json()["status"] == "ok"
-            assert len(calls) == 1
+            assert len(calls) == 4
+            assert all(url.startswith('https://sp3wroc.edupage.org/') for url,_ in calls)
             # Cache dla odczytu publicznego, również w drugim zapytaniu.
             assert client.get("/api/canteen/sp3").status_code == 200
-            assert len(calls) == 1
+            assert len(calls) == 4
         finally:
             SESSIONS.pop(token,None)
 
@@ -177,3 +180,4 @@ def test_dockerfile_contains_module():
     from pathlib import Path
     text=(Path(__file__).resolve().parents[1]/"Dockerfile").read_text()
     assert "canteen_sp3.py" in text
+

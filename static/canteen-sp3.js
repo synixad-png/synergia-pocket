@@ -72,21 +72,55 @@
       '<h2>'+esc(label(selected,{weekday:'long'}))+'</h2><p>'+esc(label(selected,{day:'numeric',month:'long',year:'numeric'}))+'</p>'+archive+'</div>'+body+'</section></div>';
   }
 
+  function renderPayments(payment) {
+    const announcements=Array.isArray(payment.announcements)?payment.announcements:[];
+    const current=announcements.filter(n=>n.period_status==='current');
+    const upcoming=announcements.filter(n=>n.period_status==='upcoming');
+    const archived=announcements.filter(n=>n.period_status==='archive');
+    const dateText=value=>valid(value)?label(value,{day:'numeric',month:'long',year:'numeric'}):'Nie podano';
+    const card=notice=>{
+      const archive=notice.period_status==='archive';
+      const rows=[];
+      if(notice.amount) rows.push(['Kwota z ogłoszenia',notice.amount]);
+      if(notice.meal_count && notice.unit_price) rows.push(['Liczba i cena obiadów',notice.meal_count+' × '+notice.unit_price]);
+      else if(notice.unit_price) rows.push(['Cena jednego obiadu',notice.unit_price]);
+      if(notice.deadline) rows.push(['Termin wpłaty',notice.window_start?dateText(notice.window_start)+' – '+dateText(notice.deadline):dateText(notice.deadline)]);
+      if(notice.bank_account) rows.push(['Konto szkoły',notice.bank_account]);
+      if(notice.transfer_title) rows.push(['Tytuł przelewu',notice.transfer_title]);
+      return '<article class="canteen-payment-card'+(archive?' is-archive':'')+'">'+
+        '<div class="canteen-payment-heading"><h3>'+esc(notice.period_label)+'</h3><span class="pill">'+
+        (archive?'Archiwum':notice.period_status==='upcoming'?'Kolejny miesiąc':'Bieżący miesiąc')+'</span></div>'+
+        '<p class="canteen-payment-scope">'+esc(notice.scope)+'</p>'+
+        (!notice.complete?'<p class="canteen-warning">Dane niepełne — nie udało się potwierdzić kwoty lub terminu.</p>':'')+
+        '<dl class="canteen-payment-fields">'+rows.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>'+
+        (!archive && notice.deadline_passed?'<p class="canteen-hint">Termin podany w ogłoszeniu już minął.</p>':'')+
+        (notice.deductions?'<p class="canteen-hint">'+esc(notice.deductions)+'</p>':'')+
+        '<p class="canteen-payment-source">'+esc(notice.title)+' · '+
+        (notice.source_status==='live'?'Odczyt':'Zapis z ostatniego odczytu')+': '+esc(stamp(notice.checked_at))+'</p></article>';
+    };
+    const statusWarning=payment.status && payment.status!=='ok'?
+      '<p class="canteen-warning" role="status">'+(payment.status==='partial'?
+        'Nie udało się sprawdzić części komunikatów. Pokazujemy dostępne informacje.':
+        'Nie udało się teraz sprawdzić aktualności szkoły. Zachowane komunikaty mają datę ostatniego odczytu.')+'</p>':'';
+    return '<section class="panel canteen-panel canteen-payments"><h2 class="section-title">Płatności za obiady</h2>'+statusWarning+
+      (payment.conflict?'<p class="canteen-warning">Znaleziono różne komunikaty dla tego samego miesiąca i zakresu klas. Poniżej pokazujemy je osobno.</p>':'')+
+      (current.length?current.map(card).join(''):
+        '<p class="canteen-important">Aktualna kwota do zapłaty i termin nie zostały potwierdzone.</p><p>'+esc(payment.message||'Brak aktualnego komunikatu o płatnościach.')+'</p>')+
+      upcoming.map(card).join('')+
+      (archived.length?'<details class="canteen-payment-archive"><summary>Archiwum opłat ('+archived.length+')</summary>'+archived.map(card).join('')+'</details>':'')+
+      '<p class="canteen-hint">Kwoty z ogłoszeń szkoły nie uwzględniają indywidualnych odpisów. Aplikacja nie ma dostępu do salda ani potwierdzenia wpłaty.</p></section>';
+  }
+
   async function view(requestFn) {
     data=await requestFn('/api/canteen/sp3');
     byDate=new Map((Array.isArray(data.calendar?.days)?data.calendar.days:[])
       .filter(d=>d && valid(d.date)).map(d=>[d.date,d]));
     const payment=data.payment||{};
     const notes=Array.isArray(data.notices)?data.notices:[];
-    const paymentBody=payment.verified && payment.current_amount && payment.current_deadline?
-      '<p class="canteen-important">'+esc(payment.current_amount)+' · Termin: '+esc(payment.current_deadline)+'</p>':
-      '<p class="canteen-important">Aktualna kwota do zapłaty i termin nie zostały potwierdzone.</p>';
     return '<div class="content-head"><div><span class="eyebrow">SP3 WROCŁAW</span><h1>Stołówka</h1>'+
       '<p>Wybierz dzień i zobacz, co będzie na obiad.</p></div></div>'+
       '<section class="panel canteen-panel canteen-calendar-panel"><div id="canteen-calendar">'+renderCalendar()+'</div></section>'+
-      '<section class="panel canteen-panel"><h2 class="section-title">Płatności za obiady</h2>'+paymentBody+
-      '<p>'+esc(payment.message||'Brak aktualnego komunikatu o płatnościach.')+'</p>'+
-      '<p class="canteen-hint">Indywidualne saldo ucznia nie jest udostępnione w publicznym jadłospisie.</p></section>'+
+      renderPayments(payment)+
       '<section class="panel canteen-panel"><h2 class="section-title">Informacje organizacyjne</h2>'+
       (notes.length?notes.map(n=>'<p>'+esc(n)+'</p>').join(''):'<p>Brak nowych informacji organizacyjnych.</p>')+'</section>'+
       '<p class="canteen-footnote">Źródło: jadłospis podlinkowany przez SP3 Wrocław · Sprawdzenie: '+esc(stamp(data.calendar?.checked_at||data.checked_at))+'.</p>';

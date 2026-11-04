@@ -6,6 +6,7 @@ Informacje nieaktualne lub niepewne NIE są oznaczane jako bieżące płatności
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from hashlib import sha256
 from html import unescape
@@ -19,6 +20,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from zoneinfo import ZoneInfo
 
 from canteen_calendar import allowed_menu_url, load_calendar, saved_calendar, period_bounds
+from canteen_payments import load_payments, saved_notices, summarize as summarize_payments, parse_notice
 
 from fastapi import HTTPException, Request as FastRequest
 from fastapi.responses import Response
@@ -241,6 +243,8 @@ def _parse_page(html: str, today: date) -> dict:
         "notices": _notice_text(page),
         "registration_url": _find_registration_link(page),
         "_image_url": picture,
+        "_payment_notice": parse_notice(" ".join(text for _,text in page.texts),title="Komunikat stołówki SP3",
+                                        source_url=SCHOOL_URL,checked_at=datetime.now(timezone.utc).isoformat()),
     }
 
 
@@ -255,25 +259,25 @@ def _empty_state() -> dict:
         "notices": [],
         "registration_url": None,
         "calendar": saved_calendar(),
-        "payment": {
-            "current_amount": None,
-            "current_deadline": None,
-            "account_balance": None,
-            "verified": False,
-            "message": "Brak potwierdzonej kwoty i terminu płatności na bieżący miesiąc. Sprawdź komunikat szkoły; Synergia Pocket nie ma dostępu do indywidualnych rozliczeń.",
-        },
+        "payment": summarize_payments(saved_notices(),datetime.now(ZoneInfo("Europe/Warsaw")).date(),
+                                      status="unavailable",checked_at=None),
     }
 
 
 def _get_public_data() -> dict:
     result = _empty_state()
+    today = datetime.now(ZoneInfo("Europe/Warsaw")).date()
+    # News fetching is independent of the menu and runs alongside it.
+    payment_pool = ThreadPoolExecutor(max_workers=1)
+    payment_job = payment_pool.submit(load_payments, _fetch, today)
+    school_payment = None
     try:
         raw, typ = _fetch(SCHOOL_URL)
         html = raw.decode("utf-8", "replace")
         if not re.search(r"stołówka|stolowka|jadłospis|obiady", html, re.I):
             raise ValueError("Strona szkoły nie zawiera rozpoznawalnej treści stołówki.")
-        today = datetime.now(ZoneInfo("Europe/Warsaw")).date()
         parsed = _parse_page(html, today)
+        school_payment = parsed["_payment_notice"]
         result["status"] = "ok"
         result["menu"] = parsed["menu"]
         result["notices"] = parsed["notices"]
@@ -285,6 +289,16 @@ def _get_public_data() -> dict:
             result["calendar"] = calendar
     except Exception as exc:
         LOG.warning("Publiczna strona stołówki SP3 chwilowo niedostępna: %s", type(exc).__name__)
+    try:
+        result["payment"] = payment_job.result()
+        if school_payment:
+            payment=result["payment"]
+            result["payment"]=summarize_payments(payment["announcements"]+[school_payment],today,
+                                                status=payment["status"],checked_at=payment["checked_at"])
+    except Exception as exc:
+        LOG.warning("Komunikaty o opłatach SP3 chwilowo niedostępne: %s", type(exc).__name__)
+    finally:
+        payment_pool.shutdown(wait=True)
     return result
 
 
@@ -300,6 +314,16 @@ async def _current():
         if (info.get("calendar", {}).get("status") == "saved"
                 and previous.get("days") and previous.get("status") in ("ok", "partial", "stale")):
             info["calendar"] = {**previous, "status": "stale"}
+        # Keep previously read fee notices during a source outage, with their
+        # original month, timestamp and a visible stale marker.
+        payment = info["payment"]
+        if payment["status"] != "ok":
+            seen = {n["id"]: n for n in payment["announcements"]}
+            for notice in _cache.get("payment", {}).get("announcements", []):
+                if notice["id"] not in seen or seen[notice["id"]]["source_status"] == "saved":
+                    seen[notice["id"]] = {**notice,"source_status":"stale"}
+            info["payment"] = summarize_payments(list(seen.values()),datetime.now(ZoneInfo("Europe/Warsaw")).date(),
+                                                status=payment["status"],checked_at=payment["checked_at"])
         img = info.pop("_image_url", None)
         _media_index = {info["menu"]["image_id"]: img} if img and info["menu"] else {}
         _cache = info
