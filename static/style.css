@@ -284,3 +284,18 @@ html:not([data-theme="dark"]) #dialog-body .message-modal-attachments {
 .compose-preview small{color:var(--soft-text);font-size:11px;line-height:1.5}
 .compose-reply-summary{background:var(--surface2);border-radius:10px;padding:10px;overflow-wrap:anywhere}
 @media(max-width:620px){.compose-dialog{padding:18px 15px;width:100%;max-height:96dvh}.compose-contacts{max-height:29dvh}.message-toolbar{display:grid;gap:8px}.message-toolbar .button{width:100%}}
+/* Linia upływu czasu trwającej lekcji, aktualizowana bez przeładowania strony. */
+.lesson-card.lesson-ongoing{border-left-color:#e7515c;box-shadow:0 0 0 1px rgba(231,81,92,.22)}
+.lesson-live{margin-top:13px;padding-top:12px;border-top:1px solid var(--line);min-width:0}
+.lesson-live-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;font-size:11px;font-weight:800}
+.lesson-live-status{color:#d83a4a;white-space:nowrap}
+.lesson-live-time{color:var(--ink);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.lesson-live-track{height:5px;border-radius:20px;position:relative;background:#f2cbd0;overflow:visible}
+.lesson-live-fill{position:absolute;top:0;left:0;height:100%;border-radius:20px;background:#e7515c;transition:width .25s linear}
+.lesson-live-marker{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;background:#df4654;border:2px solid var(--surface);box-shadow:0 0 0 1px #df4654;transform:translate(-50%,-50%);transition:left .25s linear}
+html[data-theme="dark"] .lesson-card.lesson-ongoing{border-left-color:#ff7782;box-shadow:0 0 0 1px rgba(255,119,130,.28)}
+html[data-theme="dark"] .lesson-live-status{color:#ff9199}
+html[data-theme="dark"] .lesson-live-track{background:#59424e}
+html[data-theme="dark"] .lesson-live-fill,html[data-theme="dark"] .lesson-live-marker{background:#ff7782}
+html[data-theme="dark"] .lesson-live-marker{box-shadow:0 0 0 1px #ff7782}
+@media(max-width:370px){.lesson-live-heading{font-size:10px;gap:5px}}

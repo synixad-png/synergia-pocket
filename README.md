@@ -93,3 +93,7 @@ Instancja darmowego Render Key Value `synergia-pocket-sessions` została utworzo
 - Wysyłka nie jest ponawiana automatycznie. Po błędzie bez potwierdzenia najpierw sprawdź **Wysłane**. Limit: 10 prób na godzinę na profil; blokada powtórzenia identyfikatora żądania w pamięci procesu.
 - Lista kontaktów może być inna dla każdej córki. W trybie demo nic nie jest wysyłane. Brak wysyłania załączników i obsługi DW/UDW.
 - Testy zostały wykonane na symulowanym API. Nie potwierdzono jeszcze prawdziwej wysyłki z konta Synergia ani pełnego audytu bezpieczeństwa.
+
+### Aktualny czas na planie lekcji
+
+Na dzisiejszych, nieodwołanych, trwających lekcjach pojawia się poziomy czerwony pasek postępu oraz aktualna godzina i liczba minut od rozpoczęcia zajęć. Wskazanie liczone jest w strefie Europe/Warsaw, aktualizowane co 15 sekund bez odświeżania danych Synergii. Po zakończeniu lekcji znacznik znika. Funkcja nie wymaga dodatkowych uprawnień API ani dostępu do haseł.
