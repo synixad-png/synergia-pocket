@@ -570,7 +570,10 @@ async def logout(request: Request):
     if session:
         await close_session_clients(session)
     await delete_saved_session(token)
-    await PUSH_SERVICE.forget_token(token)
+    try:
+        await PUSH_SERVICE.forget_token(token)
+    except Exception as exc:
+        LOG.warning("Nie udało się usunąć subskrypcji Push: %s", type(exc).__name__)
     response = JSONResponse({"ok": True})
     response.delete_cookie("synergia_session", path="/")
     return response
