@@ -28,7 +28,7 @@ jobs:
         run: python -m compileall -q app.py session_store.py tests
       - name: Check frontend JavaScript syntax
         run: |
-          for js in static/app.js static/messaging.js static/theme.js static/lesson-progress.js static/timetable-extras.js static/push.js static/school-files.js static/sw.js; do
+          for js in static/app.js static/messaging.js static/theme.js static/lesson-progress.js static/timetable-extras.js static/push.js static/school-files.js static/message-attachments.js static/sw.js; do
             node --check "$js"
           done
       - name: Unit and regression tests (mock accounts only)
