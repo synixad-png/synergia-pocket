@@ -14,7 +14,7 @@ import canteen_sp3 as canteen
 
 
 def _page(ending, image="/cloud/sp3-jadlospis.png"):
-    period = "02-06." + ending.strftime("%m.%Y")
+    period = f"01-{ending.day:02d}.{ending.month:02d}.{ending.year}"
     return f"""
     <html><body><h1>Stołówka</h1>
     <div><h2>{period}</h2>
