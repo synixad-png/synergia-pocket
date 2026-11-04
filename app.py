@@ -625,7 +625,10 @@ async def live_section(client: Any, section: str, week: date | None, mailbox: st
                     "canceled": val(lesson, "is_canceled", False),
                     "substitution": val(lesson, "is_substitution", False),
                     "note": val(lesson, "substitution_note"),
-                    "original_subject": lookup(subjects, val(original, "subject_id"), "")
+                    "original_subject": lookup(subjects, val(original, "subject_id"), ""),
+                    "original_teacher": lookup(teachers, val(original, "teacher_id"), ""),
+                    "original_room": lookup(rooms, val(original, "classroom_id"), ""),
+                    "room_changed": val(lesson, "room_changed", False)
                 })
             days.append({"date": day.isoformat(), "lessons": lessons})
         return {"week_start": start.isoformat(), "days": days}

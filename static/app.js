@@ -113,14 +113,14 @@ async function navigate(page, opt={}) {
     let html;
     if(page==='dashboard') html=await dashboard();
     else if(page==='grades') html=renderGrades(await section('grades'));
-    else if(page==='timetable') html=renderTimetable(await section('timetable',{week:iso(state.week)}));
+    else if(page==='timetable') { const [plan,grades]=await Promise.all([section('timetable',{week:iso(state.week)}),section('grades').catch(()=>null)]); html=renderTimetable(plan); opt.timetableExtras={plan,grades}; }
     else if(page==='attendance') html=renderAttendance(await section('attendance'));
     else if(page==='agenda') html=renderAgenda(await section('agenda'));
     else if(page==='homework') html=renderHomework(await section('homework'));
     else if(page==='messages') html=renderMessages(await section('messages',{mailbox:state.mailbox}));
     else if(page==='notes') html=renderNotes(await section('notes'));
     else if(page==='announcements') html=renderAnnouncements(await section('announcements'));
-    if(seq===state.loading) { $('content').innerHTML=html; document.querySelectorAll('.donut[data-pct]').forEach(el=>el.style.setProperty('--percentage',el.dataset.pct+'%')); if(page==='timetable') window.SynergiaLessonClock?.update(); }
+    if(seq===state.loading) { $('content').innerHTML=html; document.querySelectorAll('.donut[data-pct]').forEach(el=>el.style.setProperty('--percentage',el.dataset.pct+'%')); if(page==='timetable') { window.SynergiaTimetable?.enhance(opt.timetableExtras?.plan,opt.timetableExtras?.grades); window.SynergiaLessonClock?.update(); } }
     return true;
   } catch(ex) {
     if(seq===state.loading) $('content').innerHTML=head(labels[page],'Nie udało się pobrać danych.')+`<div class="error-box">${esc(errDetail(ex))}</div><p><button class="button button-outline button-sm" data-action="retry">Spróbuj ponownie</button></p>`;
