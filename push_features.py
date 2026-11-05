@@ -86,6 +86,7 @@ class PushService:
         self._poll_lock = asyncio.Lock()
         self._last_poll = 0.0
         self._task: asyncio.Task | None = None
+        self._runner: asyncio.Task | None = None
 
     def config(self):
         return {"available": self.ready, "public_key": self.public_key if self.ready else "",
@@ -100,7 +101,40 @@ class PushService:
             return
         self._task = asyncio.create_task(self.poll())
 
+    def start(self):
+        if self.ready and (self._runner is None or self._runner.done()):
+            self._runner = asyncio.create_task(self._run())
+
+    async def _run(self):
+        while True:
+            self.schedule()
+            await asyncio.sleep(60)
+
+    async def status(self, request: Request, body: EndpointBody):
+        self.origin_check(request)
+        if not self.ready:
+            raise HTTPException(503, "Powiadomienia nie są skonfigurowane na serwerze.")
+        session = await self.get_session(request)
+        async with session.lock:
+            self.session_check(request, session)
+            record = await self._read(endpoint_key(body.endpoint))
+            token = request.cookies.get("synergia_session", "")
+            if not record or record.get("token") != token:
+                return {"active": False, "reason": "missing_registration"}
+            profiles = [p for p in session.profiles.values() if p.mode == "live"]
+            active = bool(profiles) and all(p.id in record.get("seen", {}) for p in profiles)
+            return {"active": active, "scope": "unread_messages",
+                    "profiles": [p.name for p in profiles],
+                    "last_checked": record.get("last_checked"),
+                    "last_sent": record.get("last_sent")}
+
     async def close(self):
+        if self._runner and not self._runner.done():
+            self._runner.cancel()
+            try:
+                await self._runner
+            except asyncio.CancelledError:
+                pass
         task = self._task
         if task and not task.done():
             task.cancel()
@@ -163,6 +197,8 @@ class PushService:
                         raise HTTPException(503, "Nie można teraz pobrać wiadomości z Synergii.") from exc
             record = {"version": 1, "token": token, "subscription": subscription,
                       "seen": {p.id: list(seen.get(p.id, []))[-MAX_SEEN:] for p in profiles},
+                      "last_checked": (existing or {}).get("last_checked") if existing and existing.get("token") == token else None,
+                      "last_sent": (existing or {}).get("last_sent") if existing and existing.get("token") == token else None,
                       "last_test": (existing or {}).get("last_test", 0) if existing and existing.get("token") == token else 0}
             if existing is None:
                 n = 0
@@ -291,6 +327,7 @@ class PushService:
                 except Exception as exc:
                     LOG.info("Pominięto chwilowo konto bez dostępu do poczty: %s", type(exc).__name__)
                     continue
+                record["last_checked"] = int(time.time())
                 ids = [str(m.id) for m in messages]
                 known = set(map(str, seen.get(profile.id, [])))
                 if profile.id not in seen:
@@ -306,6 +343,7 @@ class PushService:
                                "tag": "synergia-" + hashlib.sha256((profile.id + str(newest.id)).encode()).hexdigest()[:24]}
                     try:
                         await self._send(record["subscription"], payload)
+                        record["last_sent"] = int(time.time())
                     except Exception as exc:
                         LOG.warning("Push niepotwierdzony: %s", type(exc).__name__)
                         response = getattr(exc, "response", None)
@@ -330,6 +368,10 @@ def install_push_routes(app: FastAPI, store: Any, sessions: dict, restore: Calla
     @app.get("/api/push/config")
     async def push_config():
         return service.config()
+
+    @app.post("/api/push/status")
+    async def push_status(body: EndpointBody, request: Request):
+        return await service.status(request, body)
 
     @app.post("/api/push/subscribe")
     async def push_subscribe(body: SubscriptionBody, request: Request):

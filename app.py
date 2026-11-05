@@ -46,6 +46,7 @@ async def lifespan(_app):
             LOG.error("Magazyn sesji Redis niedostępny: %s", type(exc).__name__)
         else:
             print("INFO: Magazyn sesji Redis: PING i zapis/odczyt OK", flush=True)
+    PUSH_SERVICE.start()
     yield
     await PUSH_SERVICE.close()
     for token in list(SESSIONS):

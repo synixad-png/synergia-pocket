@@ -106,7 +106,8 @@ Na dzisiejszych, nieodwołanych, trwających lekcjach pojawia się poziomy czerw
 - Jedna subskrypcja iPhone'a monitoruje do dwóch profili Synergii w bieżącej sesji.
 - Serwer odczytuje tylko listy odebranych wiadomości (do 30 na profil); nie odczytuje treści.
 - Podczas włączania zapamiętywany jest stan obecnych wiadomości; powiadomienia pojawiają się wyłącznie o później wykrytych nowych, nieprzeczytanych wiadomościach.
-- Web Push jest sprawdzany wyłącznie po wywołaniach endpointu /api/health przez harmonogram GitHub Actions. Harmonogram działa w dni robocze 07:03–17:53 w strefie Europe/Warsaw i nie jest gwarantowany. Opóźnienia do 10+ minut i pominięte wywołania są możliwe.
+- Web Push jest sprawdzany również przez pętlę serwera (co około 9–10 minut, gdy proces działa), uruchamianą przy starcie. Darmowy Render może zasypiać i wtedy pętla nie działa. Dodatkowe wywołania /api/health mogą uruchamiać sprawdzanie przez harmonogram GitHub Actions. Harmonogram działa w dni robocze 07:03–17:53 w strefie Europe/Warsaw i nie jest gwarantowany. Opóźnienia do 10+ minut i pominięte wywołania są możliwe.
+- Status w aplikacji jest potwierdzany przez serwer dla bieżącej sesji i pokazuje czas ostatniego udanego odczytu wiadomości. Sama zgoda telefonu nie oznacza aktywnego powiązania.
 - Sesja musi być ważna, a jej ciasteczka Synergia nadal umożliwiać odczyt wiadomości. Ponowne logowanie lub zmiana uprawnień Librusa może przerwać powiadomienia.
 - Rejestracje są szyfrowane na serwerze Fernet i zapisywane w Redis z ograniczonym czasem życia. Bez haseł. Bez treści i nazwisk nauczycieli w Push.
 - Render Free Key Value jest nietrwały: restart Redis kasuje subskrypcje i sesje; wtedy ponownie otwórz aplikację, aby odnowić subskrypcję, lub włącz powiadomienia ponownie.

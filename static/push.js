@@ -5,6 +5,7 @@
   let config = null;
   let pending = null;
   let busy = false;
+  let refreshVersion = 0;
   const supported = () => 'serviceWorker' in navigator && 'PushManager' in window &&
       'Notification' in window && window.isSecureContext;
   const endpoint = subscription => ({endpoint:subscription.endpoint,keys:subscription.toJSON().keys});
@@ -34,13 +35,15 @@
     return Uint8Array.from(raw, c=>c.charCodeAt(0));
   }
   async function registration() {
-    return navigator.serviceWorker.register('/sw.js',{scope:ROOT});
+    await navigator.serviceWorker.register('/sw.js',{scope:ROOT});
+    return navigator.serviceWorker.ready;
   }
   async function currentSubscription() {
     const reg=await registration();
     return reg.pushManager.getSubscription();
   }
   async function refreshUi() {
+    const version=++refreshVersion;
     const on=document.getElementById('push-enable');
     const off=document.getElementById('push-disable');
     const test=document.getElementById('push-test');
@@ -50,14 +53,27 @@
       label('Na iPhonie wymagany iOS 16.4+ i aplikacja dodana do ekranu głównego.');
       return;
     }
-    const hasPermission=Notification.permission==='granted';
-    const existing=hasPermission?await currentSubscription().catch(()=>null):null;
-    on.hidden=Boolean(existing); if(off)off.hidden=!existing;if(test)test.hidden=!existing;
     if(Notification.permission==='denied') {
-      on.disabled=true;label('Powiadomienia zablokowane w Ustawieniach iPhone → Powiadomienia.');
-    } else {
-      on.disabled=false;
-      label(existing?'Powiadomienia włączone na tym urządzeniu (oba profile).':'Powiadomienia wyłączone.');
+      on.disabled=true;on.hidden=false;if(off)off.hidden=true;if(test)test.hidden=true;
+      label('Powiadomienia zablokowane w ustawieniach urządzenia.');return;
+    }
+    try {
+      await ensureConfig();
+      const existing=Notification.permission==='granted'?await currentSubscription():null;
+      if(version!==refreshVersion)return;
+      on.disabled=false;on.hidden=false;if(off)off.hidden=!existing;if(test)test.hidden=true;
+      if(!existing){label('Powiadomienia wyłączone.');return;}
+      const status=await req('/api/push/status',{endpoint:existing.endpoint});
+      if(version!==refreshVersion)return;
+      on.hidden=Boolean(status.active);if(test)test.hidden=!status.active;
+      if(!status.active){label('Brak aktywnego powiązania z serwerem. Włącz powiadomienia ponownie.');return;}
+      let text='Serwer potwierdza powiadomienia o nowych nieprzeczytanych wiadomościach: '+(status.profiles||[]).join(', ')+'.';
+      text+=status.last_checked?' Ostatnie sprawdzenie: '+new Date(status.last_checked*1000).toLocaleString('pl-PL')+'.':' Oczekiwanie na pierwsze sprawdzenie.';
+      label(text+' Darmowy serwer może zasypiać i opóźniać powiadomienia.');
+    } catch(error) {
+      if(version!==refreshVersion)return;
+      on.hidden=false;on.disabled=false;if(test)test.hidden=true;
+      label(error.message||'Nie można potwierdzić powiadomień na serwerze.');
     }
   }
   async function enable(permissionResult) {
@@ -73,8 +89,9 @@
       });
       const result=await req('/api/push/subscribe',endpoint(subscription));
       label('Włączono powiadomienia: '+(result.profiles||[]).join(', '));
-    }catch(error){label(error.message||'Nie udało się włączyć powiadomień.');}
-    finally {busy=false;await refreshUi().catch(()=>{});}
+      await refreshUi();
+    }catch(error){++refreshVersion;label(error.message||'Nie udało się włączyć powiadomień.');}
+    finally {busy=false;}
   }
   async function disable() {
     if(busy)return;
@@ -86,8 +103,9 @@
         await subscription.unsubscribe();
       }
       label('Powiadomienia wyłączone.');
-    }catch(e){label(e.message||'Nie udało się wyłączyć powiadomień.');}
-    finally{busy=false;await refreshUi().catch(()=>{});}
+      await refreshUi();
+    }catch(e){++refreshVersion;label(e.message||'Nie udało się wyłączyć powiadomień.');}
+    finally{busy=false;}
   }
   async function test() {
     if(busy)return;
@@ -95,8 +113,10 @@
     try {
       const subscription=await currentSubscription();
       if(!subscription)throw new Error('Najpierw włącz powiadomienia.');
+      await req('/api/push/subscribe',endpoint(subscription));
       await req('/api/push/test',{endpoint:subscription.endpoint});
-      label('Serwer Push przyjął test. Sprawdź powiadomienia na iPhonie.');
+      ++refreshVersion;
+      label('Usługa Push przyjęła test. Sprawdź centrum powiadomień telefonu; przyjęcie nie potwierdza doręczenia.');
     }catch(e){label(e.message||'Błąd testu.');}
     finally{busy=false;}
   }
@@ -127,8 +147,7 @@
     }
   }
   function afterLogin() {
-    refreshUi().catch(()=>{});
-    renewExisting().catch(()=>{});
+    renewExisting().then(refreshUi).catch(e=>label(e.message||'Nie udało się odnowić powiadomień.'));
     openLink().catch(()=>{});
   }
   document.addEventListener('click',event=>{
@@ -147,6 +166,7 @@
     if(supported())registration().catch(()=>{});
   });
   document.addEventListener('synergia:authenticated',afterLogin);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)afterLogin();});
   // The notifications panel is rendered dynamically when the mailbox opens.
   const observe=document.getElementById('content');
   if(observe){

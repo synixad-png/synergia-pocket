@@ -130,3 +130,49 @@ def test_push_file_links_and_security():
     assert "self.registration.showNotification" in sw
     assert "'notificationclick'" in sw
     assert "'fetch'" not in sw
+
+
+def test_status_requires_server_registration_and_current_session(monkeypatch):
+    from push_features import EndpointBody, endpoint_key
+    service, session, store = make_service(monkeypatch)
+    body = EndpointBody(endpoint=APPLE_ENDPOINT)
+    async def check():
+        assert not (await service.status(request(), body))['active']
+        await service.subscribe(request(), SubscriptionBody(endpoint=APPLE_ENDPOINT, keys=KEYS))
+        status = await service.status(request(), body)
+        assert status['active'] and status['last_checked'] is None
+        await service.poll()
+        assert (await service.status(request(), body))['last_checked'] > 0
+        other = Request({'type':'http','method':'POST','headers':[(b'cookie', b'synergia_session=other-token')]})
+        assert not (await service.status(other, body))['active']
+        del store.redis.data[endpoint_key(APPLE_ENDPOINT)]
+        assert not (await service.status(request(), body))['active']
+    asyncio.run(check())
+
+
+def test_background_runner_starts_once_and_stops(monkeypatch):
+    service, _, _ = make_service(monkeypatch)
+    scheduled = []
+    service.schedule = lambda: scheduled.append(True)
+    async def check():
+        service.start()
+        runner = service._runner
+        service.start()
+        assert service._runner is runner
+        await asyncio.sleep(0)
+        assert scheduled == [True]
+        await service.close()
+        assert runner.done()
+    asyncio.run(check())
+
+
+def test_status_route_rejects_anonymous_and_cross_origin(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app as module
+    service = module.PUSH_SERVICE
+    monkeypatch.setattr(service, 'ready', True)
+    with TestClient(module.app) as client:
+        response = client.post('/api/push/status', json={'endpoint': APPLE_ENDPOINT})
+        assert response.status_code == 401
+        response = client.post('/api/push/status', json={'endpoint': APPLE_ENDPOINT}, headers={'origin': 'https://evil.invalid'})
+        assert response.status_code == 403
