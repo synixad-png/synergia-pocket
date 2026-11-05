@@ -577,10 +577,12 @@ jobs:
           before = p.read_bytes()
           assert hashlib.sha256(before).hexdigest() == '0ba7c99f7c8573712c35a10dbf42990d493255fba7ac988242a95850b213d877'
           old = '''        return h == "librus.pl" || h.hasSuffix(".librus.pl")'''
-          new = '''        // The official school-login fallback uses librus.com.pl, not librus.pl.
-          // Allow only the exact official hosts; never allow arbitrary *.com.pl.
-          return h == "librus.pl" || h.hasSuffix(".librus.pl") ||
-                 h == "librus.com.pl" || h == "www.librus.com.pl"'''
+          new = chr(10).join([
+            '        // The official school-login fallback uses librus.com.pl, not librus.pl.',
+            '        // Allow only the exact official hosts; never allow arbitrary *.com.pl.',
+            '        return h == "librus.pl" || h.hasSuffix(".librus.pl") ||',
+            '               h == "librus.com.pl" || h == "www.librus.com.pl"'
+          ])
           data = before.decode('utf-8')
           assert data.count(old) == 1, 'Unexpected portal-policy source'
           p.write_text(data.replace(old,new))
