@@ -1,4 +1,4 @@
-name: Synergia Direct — v0.31 P29 unsigned IPA (Intel)
+name: Synergia Direct — v0.31 P30 unsigned IPA (Intel)
 on:
   push:
     branches:
@@ -360,9 +360,163 @@ jobs:
           echo '7451b8b1a9a1612e46b5e487af7f9a73ffc016c63f9a0d3ea2aa1a117e96ba45  Sources/DirectAttendanceAnalytics.swift' | shasum -a 256 -c -
           echo '356b7059f8ffdd2110016ea401b7c9998c9a9218aa43977835f207335aa86d1d  Sources/DirectAttendanceAnalyticsView.swift' | shasum -a 256 -c -
           echo 'Verified P29 source hashes against clean-tested source release.'
+      - name: Apply SHA-verified P30 delta (attendance statistics and Xcode grade fix)
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/synergia-p30.patch <<'P30_PATCH'
+          --- a/Sources/DirectAttendanceAnalytics.swift
+          +++ b/Sources/DirectAttendanceAnalytics.swift
+          @@ -7,6 +7,15 @@
+               let counts: DirectAttendanceCounters
+               var id: String { month.map { "month:\($0)" } ?? "month:unknown" }
+               var label: String { month ?? "Data nierozpoznana" }
+          +}
+          +
+          +/// Day-level breakdown of *received* attendance records only. Invalid source
+          +/// dates are retained in a separate group instead of being silently discarded.
+          +struct DirectAttendanceDayStatistics: Equatable, Identifiable {
+          +    let day: String?
+          +    let counts: DirectAttendanceCounters
+          +    var id: String { day.map { "day:\($0)" } ?? "day:unknown" }
+          +    var label: String { day ?? "Data nierozpoznana" }
+           }
+           
+           struct DirectAttendanceSubjectSemesterStatistics: Equatable, Identifiable {
+          @@ -38,16 +47,20 @@
+               let unknownLessonNumbers: Int
+               let invalidDates: Int
+               let repeatedLessonSlots: Int
+          +    /// Duplicate identifiers in a *merged/cached* set can inflate totals even
+          +    /// though a single decoded response rejects duplicate IDs.
+          +    let repeatedRecordIds: Int
+               let inconsistentTypeIds: Int
+               var hasCautions: Bool {
+                   unresolvedSubjects > 0 || missingSubjectNames > 0 || unknownSemesters > 0 || unknownLessonNumbers > 0 ||
+          -        invalidDates > 0 || repeatedLessonSlots > 0 || inconsistentTypeIds > 0
+          +        invalidDates > 0 || repeatedLessonSlots > 0 || repeatedRecordIds > 0 || inconsistentTypeIds > 0
+               }
+           }
+           
+           struct DirectAttendanceAnalytics: Equatable {
+               let summary: DirectAttendanceSummary
+               let months: [DirectAttendanceMonthStatistics]
+          +    let days: [DirectAttendanceDayStatistics]
+               let subjectSemesters: [DirectAttendanceSubjectSemesterStatistics]
+               let types: [DirectAttendanceTypeStatistics]
+               let quality: DirectAttendanceQuality
+          @@ -93,6 +106,16 @@
+           
+           enum DirectAttendanceAnalyticsBuilder {
+               static func build(_ records: [DirectAttendance], subjects: [String: String]) -> DirectAttendanceAnalytics {
+          +        let groupedDays = Dictionary(grouping: records) { DirectAttendanceCalendar.day($0.date) }
+          +        let days = groupedDays.map { day, entries in
+          +            DirectAttendanceDayStatistics(day: day, counts: DirectAttendanceStatistics.count(entries))
+          +        }.sorted { a, b in
+          +            switch (a.day, b.day) {
+          +            case let (a?, b?): return a > b // latest valid school date first
+          +            case (.some, nil): return true
+          +            default: return false
+          +            }
+          +        }
+                   let groupedMonths = Dictionary(grouping: records) { DirectAttendanceCalendar.month(for: $0.date) }
+                   let months = groupedMonths.map { month, entries in
+                       DirectAttendanceMonthStatistics(month: month, counts: DirectAttendanceStatistics.count(entries))
+          @@ -138,6 +161,13 @@
+                           if !knownSlots.insert(slot).inserted { repeats += 1 }
+                       }
+                   }
+          +        // Never merge or delete records on this diagnostic alone: compare all
+          +        // received rows conservatively until the server/merge source is known.
+          +        var seenRecordIds = Set<String>()
+          +        var repeatedRecordIds = 0
+          +        for record in records {
+          +            if !seenRecordIds.insert(record.id).inserted { repeatedRecordIds += 1 }
+          +        }
+                   let inconsistentTypes = Dictionary(grouping: records, by: \.typeId)
+                       .values.filter { Set($0.map { "\(DirectAttendanceStatus.normalized($0.typeName))|\($0.isPresenceKind)" }).count > 1 }.count
+                   let quality = DirectAttendanceQuality(records: records.count,
+          @@ -149,8 +179,10 @@
+                       unknownSemesters: records.filter { $0.semester == nil }.count,
+                       unknownLessonNumbers: records.filter { ($0.lessonNumber ?? 0) <= 0 }.count,
+                       invalidDates: records.filter { DirectAttendanceCalendar.day($0.date) == nil }.count,
+          -            repeatedLessonSlots: repeats, inconsistentTypeIds: inconsistentTypes)
+          +            repeatedLessonSlots: repeats, repeatedRecordIds: repeatedRecordIds,
+          +            inconsistentTypeIds: inconsistentTypes)
+                   return DirectAttendanceAnalytics(summary: DirectAttendanceStatistics.summarize(records, subjects: subjects),
+          -            months: months, subjectSemesters: subjectSemesters, types: types, quality: quality)
+          +            months: months, days: days,
+          +            subjectSemesters: subjectSemesters, types: types, quality: quality)
+               }
+           }
+          --- a/Sources/DirectAttendanceAnalyticsView.swift
+          +++ b/Sources/DirectAttendanceAnalyticsView.swift
+          @@ -78,6 +78,9 @@
+                               if complete.quality.invalidDates > 0 {
+                                   Text("Daty wymagające weryfikacji: \(complete.quality.invalidDates)")
+                               }
+          +                    if complete.quality.repeatedRecordIds > 0 {
+          +                        Text("Powtórzone identyfikatory wpisów: \(complete.quality.repeatedRecordIds) — sumy mogą być zawyżone; wpisów nie usuwamy automatycznie")
+          +                    }
+                               if complete.quality.repeatedLessonSlots > 0 {
+                                   Text("Wiele wpisów tej samej daty i godziny: \(complete.quality.repeatedLessonSlots) (mogą być prawidłowe)")
+                               }
+          @@ -150,6 +153,18 @@
+                                   Text("Wpisy \(item.counts.recorded), obecności \(item.counts.present), nieobecności \(item.counts.absent), spóźnienia \(item.counts.late)")
+                                       .font(.caption)
+                               }
+          +                }
+          +            }
+          +            DisclosureGroup("Dni (wybrane wpisy)") {
+          +                Text("Zestawienie tylko z zapisanych wpisów, bez wyliczania oficjalnej frekwencji.")
+          +                    .font(.caption).foregroundStyle(.secondary)
+          +                if selected.days.count > 60 {
+          +                    Text("Pokazano 60 najnowszych grup z \(selected.days.count). Zawęź filtr miesiąca, aby zobaczyć pozostałe dni.")
+          +                        .font(.caption).foregroundStyle(.orange)
+          +                }
+          +                ForEach(Array(selected.days.prefix(60))) { item in
+          +                    Text("\(item.label): wpisów \(item.counts.recorded), obecności \(item.counts.present), nieobecności \(item.counts.absent), spóźnienia \(item.counts.late)")
+          +                        .font(.caption)
+                           }
+                       }
+                       DisclosureGroup("Miesiące") {
+          --- a/Sources/Portal.swift
+          +++ b/Sources/Portal.swift
+          @@ -1001,6 +1001,18 @@
+                   directGradeStatus = "Weryfikacja konta i odczyt ocen…"
+                   Task { @MainActor [weak self] in
+                       guard let self else { return }
+          +            await self.runDirectGradeRefresh(authorizedOwner: authorizedOwner,
+          +                previousOwner: previousOwner, previousVerifiedNames: previousVerifiedNames,
+          +                ownerEpoch: ownerEpoch, epoch: epoch)
+          +        }
+          +    }
+          +
+          +    // Split the verified grade batch from the Task closure: Xcode's Swift
+          +    // type-checker timed out on the original monolithic closure (P28 CI log).
+          +    // The exact read/identity/commit/catch code below is unchanged.
+          +    private func runDirectGradeRefresh(authorizedOwner: String, previousOwner: String?,
+          +                                       previousVerifiedNames: [String: String],
+          +                                       ownerEpoch: UUID, epoch: UUID) async {
+                       var observedAccount: String?
+                       do {
+                           let client = SynergiaGatewayClient(webView: self.webView)
+          @@ -1153,7 +1165,6 @@
+                           self.directGradeStatus = "Nie zapisano ocen: \(error.localizedDescription). Zapis na dysku nie został zmieniony."
+                       }
+                       if self.directGradeEpoch == epoch { self.directGradeBusy = false }
+          -        }
+               }
+          P30_PATCH
+          git apply --check /tmp/synergia-p30.patch
+          git apply /tmp/synergia-p30.patch
+          echo '5b7b3f3aed0c85ece071aed97c43e101aaf0db110da0f4b9671890b7b34ba2d6  Sources/DirectAttendanceAnalytics.swift' | shasum -a 256 -c -
+          echo '134395f5be395d4d2b5f264775879c2a052918fd7de6bb214d8c22e248bdf41d  Sources/DirectAttendanceAnalyticsView.swift' | shasum -a 256 -c -
+          echo '46352cd8ad99d3605f89646fa4e4834d6fa8340433db41de0a6505e1a632946f  Sources/Portal.swift' | shasum -a 256 -c -
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Generate Xcode project from P29
+      - name: Generate Xcode project from P30
         working-directory: synergia-direct-ios
         run: xcodegen generate
       - name: Build unsigned iPhone IPA application
@@ -371,20 +525,20 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-      - name: Package unsigned P29 IPA
+      - name: Package unsigned P30 IPA
         working-directory: synergia-direct-ios
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
-          zip -qr SYNERGIA_DIRECT_v031_P29_UNSIGNED.ipa Payload
-          unzip -tq SYNERGIA_DIRECT_v031_P29_UNSIGNED.ipa
-          shasum -a 256 SYNERGIA_DIRECT_v031_P29_UNSIGNED.ipa
-      - name: Upload P29 IPA
+          zip -qr SYNERGIA_DIRECT_v031_P30_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v031_P30_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v031_P30_UNSIGNED.ipa
+      - name: Upload P30 IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SYNERGIA_DIRECT_v031_P29_UNSIGNED_IPA
-          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P29_UNSIGNED.ipa
+          name: SYNERGIA_DIRECT_v031_P30_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P30_UNSIGNED.ipa
           if-no-files-found: error
           retention-days: 14
