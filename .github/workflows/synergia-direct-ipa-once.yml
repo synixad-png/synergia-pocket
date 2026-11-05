@@ -21,6 +21,60 @@ jobs:
           test -f synergia-direct-ios/project.yml
           test -f synergia-direct-ios/Sources/SynergiaDirectApp.swift
           echo "Unpacked real Synergia Direct Sources, not Synergia Pocket."
+      - name: Correct verified Swift build errors (P18 CI-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('synergia-direct-ios')
+          local=root/'Sources/LocalStore.swift'
+          s=local.read_text()
+          old='''        directory = base.appendingPathComponent("school-data", isDirectory: true)
+                  try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)'''
+          new='''        self.directory = base.appendingPathComponent("school-data", isDirectory: true)
+                  try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)'''
+          assert s.count(old)==1, 'Unexpected LocalStore baseline'
+          local.write_text(s.replace(old,new))
+          portal=root/'Sources/Portal.swift'
+          s=portal.read_text()
+          method_start=s.index('    func synchronizeCoreModules() {')
+          start=s.index('        Task { @MainActor [weak self] in\n            guard let self else { return }\n',method_start)
+          end_marker='''        }
+              }
+          
+          }'''
+          end=s.index(end_marker,start)
+          body_start=start+len('''        Task { @MainActor [weak self] in
+                      guard let self else { return }
+          ''')
+          body=s[body_start:end]
+          assert body.startswith('            let client = SynergiaGatewayClient(webView: self.webView)'), 'Unexpected core sync start'
+          assert body.rstrip().endswith('if self.coreSyncEpoch == epoch { self.coreSyncBusy = false }'), 'Unexpected core sync finalizer'
+          head='''        Task { @MainActor [weak self] in
+                      guard let self else { return }
+                      await self.runCoreSync(owner: owner, ownerEpoch: ownerEpoch, epoch: epoch,
+                          oldGrades: oldGrades, oldAttendance: oldAttendance,
+                          hadGradesBaseline: hadGradesBaseline, hadAttendanceBaseline: hadAttendanceBaseline,
+                          oldInbox: oldInbox)
+                  }
+              }
+          
+              // Preserve the existing synchronization branches in a separately
+              // type-checkable async method instead of one enormous Task expression.
+              private func runCoreSync(owner: String, ownerEpoch: UUID, epoch: UUID,
+                                       oldGrades: [DirectGrade], oldAttendance: [DirectAttendance],
+                                       hadGradesBaseline: Bool, hadAttendanceBaseline: Bool,
+                                       oldInbox: DirectMailboxSnapshot?) async {
+          '''
+          post='''    }
+          
+          }'''
+          s=s[:start]+head+body+post+s[end+len(end_marker):]
+          assert s.count('private func runCoreSync(')==1
+          portal.write_text(s)
+          print('Verified Swift source hotfixes applied only inside CI checkout')
+          PY
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
