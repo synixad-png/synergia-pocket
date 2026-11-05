@@ -1,0 +1,49 @@
+name: Synergia Direct — one-time unsigned IPA
+on:
+  push:
+    branches:
+      - ci/synergia-direct-ipa-20261105
+permissions:
+  contents: read
+jobs:
+  ios-build:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack isolated Synergia Direct sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p synergia-direct-ios
+          base64 -D -i ci/SYNERGIA_DIRECT_v031_P18_BUILD_SOURCE_BASE64.txt -o /tmp/synergia-source.zip
+          unzip -q /tmp/synergia-source.zip -d synergia-direct-ios
+          test -f synergia-direct-ios/project.yml
+          test -f synergia-direct-ios/Sources/SynergiaDirectApp.swift
+          echo "Unpacked real Synergia Direct Sources, not Synergia Pocket."
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: synergia-direct-ios
+        run: xcodegen generate
+      - name: Build unsigned iOS app
+        working-directory: synergia-direct-ios
+        run: |
+          set -euo pipefail
+          xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package unsigned IPA
+        working-directory: synergia-direct-ios
+        run: |
+          set -euo pipefail
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
+          zip -qr SYNERGIA_DIRECT_v031_P18_UNSIGNED.ipa Payload
+          unzip -t SYNERGIA_DIRECT_v031_P18_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v031_P18_UNSIGNED.ipa
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SYNERGIA_DIRECT_v031_P18_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P18_UNSIGNED.ipa
+          if-no-files-found: error
+          retention-days: 14
