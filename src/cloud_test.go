@@ -59,7 +59,7 @@ func TestCloudSeparateVisitorsDoNotShareAccounts(t *testing.T) {
 func TestCloudCookieAndHeaders(t *testing.T) {
 	app := cloudTest(t)
 	cookie := cloudNewBrowser(t, app)
-	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" || cookie.Domain != "" {
+	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" || cookie.Domain != "" {
 		t.Fatal(cookie)
 	}
 	w := cloudRequest(t, app, "GET", "/", cookie, "")
@@ -259,5 +259,26 @@ func TestCloudBootstrapRetainsExistingProfilesAndRejectsCrossOrigin(t *testing.T
 	}
 	if w = cloudRequest(t, a, "GET", "/api/session/bootstrap", cookie, ""); w.Code != 405 {
 		t.Fatal("bootstrap accepts GET")
+	}
+}
+
+func TestCloudCookieHasPersistentExpiryAndResumeReportsNoSecrets(t *testing.T) {
+	a := cloudTest(t)
+	cookie := cloudNewBrowser(t, a)
+	if cookie.Expires.Sub(a.now()) < 364*24*time.Hour {
+		t.Fatal("browser cookie is not persistent")
+	}
+	missing := cloudRequest(t, a, "GET", "/api/updates/profiles", nil, "")
+	if missing.Header().Get("X-Pocket-Session") != "missing-cookie" {
+		t.Fatal("missing-cookie diagnosis unavailable")
+	}
+	client, _ := fakeAccount()
+	a.sessions[cookie.Value].app.profiles[0] = client
+	valid := cloudRequest(t, a, "GET", "/api/updates/profiles", cookie, "")
+	if valid.Header().Get("X-Pocket-Session") != "memory" || !strings.Contains(valid.Body.String(), `"logged":[true,false]`) {
+		t.Fatal("existing login lost")
+	}
+	if strings.Contains(valid.Header().Get("X-Pocket-Session"), cookie.Value) {
+		t.Fatal("diagnosis exposes a credential")
 	}
 }

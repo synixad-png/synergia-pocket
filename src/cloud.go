@@ -94,7 +94,7 @@ func (c *cloudApp) close() {
 	}
 }
 func (c *cloudApp) cookie(w http.ResponseWriter, value string, maxAge int) {
-	http.SetCookie(w, &http.Cookie{Name: "synergia_local", Value: value, Path: "/", Secure: strings.HasPrefix(c.origin, "https://"), HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
+	http.SetCookie(w, &http.Cookie{Name: "synergia_local", Value: value, Path: "/", Secure: strings.HasPrefix(c.origin, "https://"), HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: maxAge, Expires: c.now().Add(time.Duration(maxAge) * time.Second)})
 }
 func cloudHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store, private")
@@ -181,16 +181,25 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	c.mu.Lock()
 	session := c.sessions[key]
+	source := "memory"
+	if session == nil {
+		source = "missing-record"
+		if key == "" {
+			source = "missing-cookie"
+		}
+	}
 	if session == nil && key != "" {
 		var err error
 		session, err = c.restore(key)
 		if err != nil {
 			c.mu.Unlock()
+			log.Print("Session resume: storage-unavailable")
 			serveJSON(w, 503, map[string]string{"error": "Zapis sesji jest chwilowo niedostępny. Spróbuj ponownie — nie wylogowano konta."})
 			return
 		}
 		if session != nil {
 			c.sessions[key] = session
+			source = "restored"
 		}
 	}
 	if session != nil && session.inFlight == 0 && c.now().Sub(session.seen) > cloudSessionIdle {
@@ -220,6 +229,10 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if session == nil {
 		c.mu.Unlock()
+		if r.URL.Path == "/api/updates/profiles" {
+			w.Header().Set("X-Pocket-Session", source)
+			log.Printf("Session resume: %s", source)
+		}
 		serveJSON(w, 401, map[string]string{"error": "Sesja testowa wygasła. Odśwież stronę i zaloguj profil ponownie."})
 		return
 	}
@@ -280,6 +293,13 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 		defer cancel()
 		r = r.WithContext(ctx)
+	}
+	if r.URL.Path == "/api/updates/profiles" {
+		session.app.mu.RLock()
+		flags := [2]bool{session.app.profiles[0] != nil, session.app.profiles[1] != nil}
+		session.app.mu.RUnlock()
+		w.Header().Set("X-Pocket-Session", source)
+		log.Printf("Session resume: %s profiles=%t,%t", source, flags[0], flags[1])
 	}
 	// Validate only old provider cookies, never log in with a stored password.
 	session.app.mu.RLock()
