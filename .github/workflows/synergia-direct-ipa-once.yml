@@ -1,4 +1,4 @@
-name: Synergia Direct — v0.31 P32 in-app school login unsigned IPA (Intel)
+name: Synergia Direct — v0.31 P33 native login unsigned IPA (Intel)
 on:
   push:
     branches:
@@ -590,9 +590,34 @@ jobs:
           print('P32 fallback allow-list restricted to official exact domains')
           PY
           swiftc -frontend -parse Sources/*.swift
+      - name: Apply SHA-verified P33 native SwiftUI login UI
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, lzma
+          from pathlib import Path
+          text = Path('../ci/SYNERGIA_DIRECT_v031_P32_TO_P33_NATIVE_LOGIN.patch.xz.b64').read_text().strip()
+          patch = lzma.decompress(base64.b64decode(text))
+          expected = 'e6ef767806ee64c1ea0afb85cecece67d1fa872f431f5f84a372f9e871eb791d'
+          assert hashlib.sha256(patch).hexdigest() == expected, 'P33 native login source patch mismatch'
+          Path('/tmp/synergia-p33.patch').write_bytes(patch)
+          print('P33 patch SHA-256 verified')
+          PY
+          git apply --check /tmp/synergia-p33.patch
+          git apply /tmp/synergia-p33.patch
+          shasum -a 256 -c <<'P33_SHA'
+          b1c28004f068261fc6df716021652abb06767d0ff9cca9d5616a9d014d0f2590  Sources/MainView.swift
+          31a1d85049ca40e694c807817f6427d93efc99c467d9f99553ba6d9e840619ea  Sources/Portal.swift
+          5d8e38f24186fa50174ed6e99b938b437e2ff21aafb6f01824d6a92e839767e1  Sources/NativeSchoolLoginPolicy.swift
+          P33_SHA
+          swiftc -frontend -parse Sources/*.swift
+          swiftc -parse-as-library -emit-module Sources/NativeSchoolLoginPolicy.swift -o /tmp/NativeSchoolLoginPolicy.swiftmodule
+          echo 'P33 native UI and official login form bridge passed strict SHA and Swift parse checks.'
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Generate Xcode project from verified P32
+      - name: Generate Xcode project from verified P33
         working-directory: synergia-direct-ios
         run: xcodegen generate
       - name: Build unsigned iPhone IPA application
@@ -601,20 +626,20 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-      - name: Package unsigned P32 IPA
+      - name: Package unsigned P33 IPA
         working-directory: synergia-direct-ios
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
-          zip -qr SYNERGIA_DIRECT_v031_P32_UNSIGNED.ipa Payload
-          unzip -tq SYNERGIA_DIRECT_v031_P32_UNSIGNED.ipa
-          shasum -a 256 SYNERGIA_DIRECT_v031_P32_UNSIGNED.ipa
-      - name: Upload P32 IPA
+          zip -qr SYNERGIA_DIRECT_v031_P33_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v031_P33_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v031_P33_UNSIGNED.ipa
+      - name: Upload P33 IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SYNERGIA_DIRECT_v031_P32_UNSIGNED_IPA
-          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P32_UNSIGNED.ipa
+          name: SYNERGIA_DIRECT_v031_P33_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P33_UNSIGNED.ipa
           if-no-files-found: error
           retention-days: 14
