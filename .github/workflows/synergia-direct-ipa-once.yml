@@ -1,4 +1,4 @@
-name: Synergia Direct — one-time unsigned IPA
+name: Synergia Direct — v0.31 P28 unsigned IPA (Intel)
 on:
   push:
     branches:
@@ -8,96 +8,50 @@ permissions:
 jobs:
   ios-build:
     runs-on: macos-15-intel
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack isolated Synergia Direct sources
+      - name: Verify and unpack exact Synergia Direct P28 source archive
         shell: bash
         run: |
           set -euo pipefail
+          echo "040d334503872819e53d192c869464fc0eb48b1261e9b1da7ed8f4ff83203d61  ci/SYNERGIA_DIRECT_v031_P28_XCODE_FIX_PELNE_ZRODLA.zip" | shasum -a 256 -c -
+          unzip -tq "ci/SYNERGIA_DIRECT_v031_P28_XCODE_FIX_PELNE_ZRODLA.zip"
           mkdir -p synergia-direct-ios
-          base64 -D -i ci/SYNERGIA_DIRECT_v031_P18_BUILD_SOURCE_BASE64.txt -o /tmp/synergia-source.zip
-          unzip -q /tmp/synergia-source.zip -d synergia-direct-ios
+          unzip -q "ci/SYNERGIA_DIRECT_v031_P28_XCODE_FIX_PELNE_ZRODLA.zip" -d synergia-direct-ios
           test -f synergia-direct-ios/project.yml
           test -f synergia-direct-ios/Sources/SynergiaDirectApp.swift
-          echo "Unpacked real Synergia Direct Sources, not Synergia Pocket."
-      - name: Correct verified Swift build errors (P18 CI-only)
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          root=Path('synergia-direct-ios')
-          local=root/'Sources/LocalStore.swift'
-          s=local.read_text()
-          old='''        directory = base.appendingPathComponent("school-data", isDirectory: true)
-                  try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)'''
-          new='''        self.directory = base.appendingPathComponent("school-data", isDirectory: true)
-                  try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)'''
-          assert s.count(old)==1, 'Unexpected LocalStore baseline'
-          local.write_text(s.replace(old,new))
-          portal=root/'Sources/Portal.swift'
-          s=portal.read_text()
-          method_start=s.index('    func synchronizeCoreModules() {')
-          start=s.index('        Task { @MainActor [weak self] in\n            guard let self else { return }\n',method_start)
-          end_marker='''        }
-              }
-          
-          }'''
-          end=s.index(end_marker,start)
-          body_start=start+len('''        Task { @MainActor [weak self] in
-                      guard let self else { return }
-          ''')
-          body=s[body_start:end]
-          assert body.startswith('            let client = SynergiaGatewayClient(webView: self.webView)'), 'Unexpected core sync start'
-          assert body.rstrip().endswith('if self.coreSyncEpoch == epoch { self.coreSyncBusy = false }'), 'Unexpected core sync finalizer'
-          head='''        Task { @MainActor [weak self] in
-                      guard let self else { return }
-                      await self.runCoreSync(owner: owner, ownerEpoch: ownerEpoch, epoch: epoch,
-                          oldGrades: oldGrades, oldAttendance: oldAttendance,
-                          hadGradesBaseline: hadGradesBaseline, hadAttendanceBaseline: hadAttendanceBaseline,
-                          oldInbox: oldInbox)
-                  }
-              }
-          
-              // Preserve the existing synchronization branches in a separately
-              // type-checkable async method instead of one enormous Task expression.
-              private func runCoreSync(owner: String, ownerEpoch: UUID, epoch: UUID,
-                                       oldGrades: [DirectGrade], oldAttendance: [DirectAttendance],
-                                       hadGradesBaseline: Bool, hadAttendanceBaseline: Bool,
-                                       oldInbox: DirectMailboxSnapshot?) async {
-          '''
-          post='''    }
-          
-          }'''
-          s=s[:start]+head+body+post+s[end+len(end_marker):]
-          assert s.count('private func runCoreSync(')==1
-          portal.write_text(s)
-          print('Verified Swift source hotfixes applied only inside CI checkout')
-          PY
+          test -f synergia-direct-ios/Sources/DirectAttendanceStatistics.swift
+          test -f synergia-direct-ios/RAPORT_PAKIET_28_STATUSY_FREKWENCJI.md
+          test -f synergia-direct-ios/RAPORT_CI_P28_KOMPILACJA.md
+          grep -q 'private func runCoreSync' synergia-direct-ios/Sources/Portal.swift
+          grep -q 'self.directory = base.appendingPathComponent' synergia-direct-ios/Sources/LocalStore.swift
+          echo 'Verified COMPLETE SYNERGIA DIRECT P28 + Xcode fixes. No P18 source substitutions.'
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Generate Xcode project
+      - name: Generate Xcode project from P28
         working-directory: synergia-direct-ios
         run: xcodegen generate
-      - name: Build unsigned iOS app
+      - name: Build unsigned iPhone IPA application
         working-directory: synergia-direct-ios
+        shell: bash
         run: |
           set -euo pipefail
           xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-      - name: Package unsigned IPA
+      - name: Package unsigned P28 IPA
         working-directory: synergia-direct-ios
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
-          zip -qr SYNERGIA_DIRECT_v031_P18_UNSIGNED.ipa Payload
-          unzip -t SYNERGIA_DIRECT_v031_P18_UNSIGNED.ipa
-          shasum -a 256 SYNERGIA_DIRECT_v031_P18_UNSIGNED.ipa
-      - name: Upload IPA
+          zip -qr SYNERGIA_DIRECT_v031_P28_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v031_P28_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v031_P28_UNSIGNED.ipa
+      - name: Upload P28 IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SYNERGIA_DIRECT_v031_P18_UNSIGNED_IPA
-          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P18_UNSIGNED.ipa
+          name: SYNERGIA_DIRECT_v031_P28_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P28_UNSIGNED.ipa
           if-no-files-found: error
           retention-days: 14
