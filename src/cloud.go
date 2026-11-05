@@ -24,15 +24,18 @@ import (
 //go:embed web/*
 var cloudAssets embed.FS
 
-const cloudSessionIdle = 12 * time.Hour
+const cloudSessionIdle = 365 * 24 * time.Hour
 
 type cloudSession struct {
+	saveMu   sync.Mutex
+	revoked  bool
 	app      *LocalApp
 	handler  http.Handler
 	seen     time.Time
 	inFlight int
 }
 type cloudApp struct {
+	store      cloudSessionStore
 	origin     string
 	mu         sync.Mutex
 	sessions   map[string]*cloudSession
@@ -108,7 +111,7 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Method", 405)
 			return
 		}
-		serveJSON(w, 200, map[string]string{"status": "ok", "service": "synergia-pocket-own-api", "version": "web-0.16", "client": "own-go-v0.13"})
+		serveJSON(w, 200, map[string]string{"status": "ok", "service": "synergia-pocket-own-api", "version": "web-0.17", "client": "own-go-v0.13"})
 		return
 	}
 	origin, _ := url.Parse(c.origin)
@@ -173,6 +176,18 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	c.mu.Lock()
 	session := c.sessions[key]
+	if session == nil && key != "" {
+		var err error
+		session, err = c.restore(key)
+		if err != nil {
+			c.mu.Unlock()
+			serveJSON(w, 503, map[string]string{"error": "Zapis sesji jest chwilowo niedostępny. Spróbuj ponownie — nie wylogowano konta."})
+			return
+		}
+		if session != nil {
+			c.sessions[key] = session
+		}
+	}
 	if session != nil && session.inFlight == 0 && c.now().Sub(session.seen) > cloudSessionIdle {
 		delete(c.sessions, key)
 		session.close()
@@ -188,12 +203,15 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a := &LocalApp{token: key, origin: c.origin}
 		session = &cloudSession{app: a, handler: a.routes()}
 		c.sessions[key] = session
-		c.cookie(w, key, int(cloudSessionIdle.Seconds()))
+
 	}
 	if session == nil {
 		c.mu.Unlock()
 		serveJSON(w, 401, map[string]string{"error": "Sesja testowa wygasła. Odśwież stronę i zaloguj profil ponownie."})
 		return
+	}
+	if r.URL.Path != "/api/exit" {
+		c.cookie(w, key, int(cloudSessionIdle.Seconds()))
 	}
 	session.seen = c.now()
 	session.inFlight++
@@ -209,10 +227,21 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Method", 405)
 			return
 		}
+		session.saveMu.Lock()
+		if c.store != nil {
+			if err := c.store.Delete(key); err != nil {
+				session.saveMu.Unlock()
+				serveJSON(w, 503, map[string]string{"error": "Nie można potwierdzić wylogowania. Spróbuj ponownie."})
+				return
+			}
+		}
+		session.revoked = true
+		session.saveMu.Unlock()
 		c.mu.Lock()
 		delete(c.sessions, key)
 		c.mu.Unlock()
 		session.close()
+
 		c.cookie(w, "", -1)
 		serveJSON(w, 200, map[string]bool{"ok": true})
 		return
@@ -235,7 +264,26 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		r = r.WithContext(ctx)
 	}
+	// Validate only old provider cookies, never log in with a stored password.
+	session.app.mu.RLock()
+	profiles := session.app.profiles
+	session.app.mu.RUnlock()
+	for _, p := range profiles {
+		if p == nil {
+			continue
+		}
+		p.mu.Lock()
+		if time.Since(p.loggedAt) >= 19*time.Hour {
+			ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+			p.confirmProviderCookie(ctx)
+			cancel()
+		}
+		p.mu.Unlock()
+	}
 	session.handler.ServeHTTP(w, r)
+	if err := c.persist(key, session); err != nil {
+		log.Print("Session persistence failed; retry on next request")
+	}
 }
 
 func cloudHTML() string {
@@ -247,7 +295,7 @@ func cloudHTML() string {
 		"LOKALNIE NA TWOIM KOMPUTERZE", "ODDZIELNA WERSJA TESTOWA",
 		"Panel klienta Librus", "Dziennik — własne API",
 		"Osobne sesje dwóch kont • bez integracji z Synergia Pocket", "Osobna aplikacja testowa • dwa profile",
-		"Hasła i historia powiadomień pozostają tylko w pamięci programu.", "Hasła nie są zapisywane. Sesje i historia powiadomień pozostają w pamięci serwera testowego.",
+		"Hasła i historia powiadomień pozostają tylko w pamięci programu.", "Hasła nie są zapisywane. Sesje są szyfrowane w magazynie serwera; historia powiadomień pozostaje w pamięci.",
 		"Dane wpisujesz tylko w tej lokalnej aplikacji. Klient łączy się bezpośrednio z domenami Librusa, bez serwera Render.", "Zaloguj się danymi Synergii. Aplikacja łączy się z Librusem przez nasz własny klient. Hasło nie jest zapisywane.",
 		"Zamknij program", "Wyloguj oba profile",
 		"Zamknąć lokalny program SYNERGIA API?", "Wylogować oba profile z aplikacji testowej?",
@@ -257,9 +305,9 @@ func cloudHTML() string {
 		"Nowy klient został uruchomiony. To nie jest obecna Synergia Pocket — tamta aplikacja działa niezależnie.", "Zaloguj profil, aby sprawdzić własne API. Dotychczasowa Synergia Pocket działa pod swoim dotychczasowym adresem.",
 		"Połączenie lokalne: tylko 127.0.0.1 • brak publicznego serwera", "Połączenie HTTPS • oddzielne sesje przeglądarek",
 		"Nieprawidłowa odpowiedź lokalnego serwera.", "Nieprawidłowa odpowiedź serwera.",
-		"Sesja istnieje tylko w pamięci tego programu.", "Sesja testowa istnieje w pamięci serwera. Restart lub uśpienie serwera może wymagać ponownego logowania.",
+		"Sesja istnieje tylko w pamięci tego programu.", "Sesja jest zapamiętywana w zaszyfrowanym magazynie serwera. Ponowne logowanie jest potrzebne, gdy Librus unieważni dostęp lub wybierzesz wylogowanie.",
 		"Sprawdzanie co 5 minut, gdy ten program jest uruchomiony.", "Sprawdzanie co 5 minut podczas pracy serwera testowego.",
-		"To powiadomienia wewnątrz programu Windows. Po zamknięciu programu historia znika. Nie są to powiadomienia push na iPhone.", "Powiadomienia są widoczne w aplikacji. Restart lub uśpienie serwera może wyczyścić historię i wymagać ponownego logowania. Powiadomienia push iPhone nie są włączone w tej wersji testowej.",
+		"To powiadomienia wewnątrz programu Windows. Po zamknięciu programu historia znika. Nie są to powiadomienia push na iPhone.", "Powiadomienia są widoczne w aplikacji. Restart może wyczyścić historię, ale zapisane sesje są wznawiane, dopóki Librus pozwala na dostęp. Powiadomienia push iPhone nie są włączone w tej wersji testowej.",
 	}
 	page = strings.NewReplacer(replacements...).Replace(page)
 	pwa := `<meta name="theme-color" content="#0d1b2c"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pocket Test"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="icon" href="/icon.svg"><style>body{padding-bottom:env(safe-area-inset-bottom)}header{padding-top:max(18px,env(safe-area-inset-top))}.brand h1{font-size:clamp(17px,3vw,26px)}.subtitle{line-height:1.6}@media(max-width:700px){.nav button{min-height:44px;white-space:normal}.notice{font-size:12px}}.cloud-hint{padding:12px 16px;color:#bdd3e9;background:#112137;border:1px solid #304c69;border-radius:10px;line-height:1.6;margin-bottom:16px}</style>`
@@ -288,6 +336,23 @@ func runCloud() error {
 		return errors.New("invalid PORT")
 	}
 	app := newCloudApp(origin)
+	app.store, e = configuredCloudStore()
+	if e != nil {
+		return e
+	}
+	if app.store != nil {
+		probe := token()
+		payload := []byte(`{"probe":true}`)
+		if err := app.store.Set(probe, payload); err != nil {
+			return errors.New("encrypted session storage write unavailable")
+		}
+		got, err := app.store.Get(probe)
+		deleteErr := app.store.Delete(probe)
+		if err != nil || string(got) != string(payload) || deleteErr != nil {
+			return errors.New("encrypted session storage read/delete unavailable")
+		}
+		log.Print("Encrypted session persistence: write/read/delete OK")
+	}
 	defer app.close()
 	server := &http.Server{Addr: net.JoinHostPort("0.0.0.0", port), Handler: app, ReadHeaderTimeout: 8 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32 << 10}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -304,10 +369,11 @@ func runCloud() error {
 				return
 			case <-timer.C:
 				app.prune()
+				app.renewSessions()
 			}
 		}
 	}()
-	log.Print("Synergia Pocket Test web-0.16 listening; own API client enabled")
+	log.Print("Synergia Pocket Test web-0.17 listening; own API client enabled")
 	e = server.ListenAndServe()
 	if errors.Is(e, http.ErrServerClosed) {
 		return nil

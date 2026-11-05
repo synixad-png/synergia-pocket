@@ -14,7 +14,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"os/exec"
@@ -63,10 +62,7 @@ func newAPIClient(username string) (*APIClient, error) {
 	if strings.TrimSpace(username) == "" {
 		return nil, ProtocolError{"Podaj login."}
 	}
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, err
-	}
+	jar := newPersistentJar()
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
 	cli := &http.Client{Jar: jar, Transport: transport, Timeout: 30 * time.Second,

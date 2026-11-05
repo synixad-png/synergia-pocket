@@ -51,3 +51,12 @@ wybór profili, biurko, oceny według przedmiotów i kolorowe karty planu.
 Tryb ciemny domyślnie, jasny po zmianie motywu. W pamięci lokalnej zapisuje
 się tylko wybór motywu. DEMO jest jawnie oznaczone i używa wyłącznie
 fikcyjnych danych; nie wysyła wiadomości ani nie pobiera plików szkolnych.
+
+
+## Web v0.17 — zapamiętywanie logowania
+
+Ciasteczko sesji jest ważne 365 dni i odnawiane przy korzystaniu z aplikacji. Dwa profile i ciasteczka Librusa są szyfrowane AES-256-GCM w serwerowym Redis, z oddzielnym prefiksem oraz kluczem dla Pocket TEST. Hasła nie są przechowywane. Restart procesu odtwarza profile; wylogowanie usuwa zapis i blokuje odtworzenie przez trwające żądanie. Błąd odczytu magazynu zwraca 503, zamiast podmieniać ciasteczko na pustą sesję.
+
+Wymagane sekrety: SYNERGIA_REDIS_URL i SYNERGIA_SESSION_FERNET_KEY (nazwa zgodna z konfiguracją Pocket; dla Go zawiera osobny losowy 32-bajtowy klucz Base64 do AES-GCM). Nigdy nie zmieniaj klucza podczas zwykłego wdrożenia i nie commituj jego wartości. Bez konfiguracji pozostaje tryb pamięciowy.
+
+Podczas pracy serwera dostęp jest odnawiany bezhasłowo. Librus może unieważnić sesję lub odmówić odnowienia — wtedy konieczne jest logowanie. Darmowy Redis nie zapewnia trwałości po własnym restarcie; podtrzymywanie serwera aplikacji tego nie zmienia.
