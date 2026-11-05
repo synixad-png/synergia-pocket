@@ -1,4 +1,4 @@
-name: Synergia Direct — v0.31 P28 unsigned IPA (Intel)
+name: Synergia Direct — v0.31 P29 unsigned IPA (Intel)
 on:
   push:
     branches:
@@ -27,9 +27,342 @@ jobs:
           grep -q 'private func runCoreSync' synergia-direct-ios/Sources/Portal.swift
           grep -q 'self.directory = base.appendingPathComponent' synergia-direct-ios/Sources/LocalStore.swift
           echo 'Verified COMPLETE SYNERGIA DIRECT P28 + Xcode fixes. No P18 source substitutions.'
+      - name: Apply verified P29 source patch and SHA-256 gate
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check <<'P29_PATCH'
+          --- a/Sources/DirectAttendanceStatistics.swift
+          +++ b/Sources/DirectAttendanceStatistics.swift
+          @@ -34,17 +34,75 @@
+               }
+           }
+           
+          +/// Keep a missing lesson->subject link distinct from a known subject ID whose
+          +/// display name was not returned. Neither case permits a fabricated subject.
+          +enum DirectAttendanceSubjectLabel {
+          +    static func text(id: String?, names: [String: String]) -> String {
+          +        guard let id, !id.isEmpty else { return "Przedmiot nieustalony (brak powiązania lekcji)" }
+          +        guard let name = names[id],
+          +              !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+          +            return "Nieznana nazwa przedmiotu (ID: \(id))"
+          +        }
+          +        return name
+          +    }
+          +}
+          +
+           enum DirectAttendanceCalendar {
+               /// Strict date portion: YYYY-MM-DD, optionally followed by T or a space and a time.
+               /// A malformed date must not be silently bucketed under a plausible month.
+          +    /// Reject malformed time tails rather than grouping e.g. T99:99 or Tabc as a valid day.
+          +    /// This checks syntax, not the timezone-adjusted calendar day: the server's date
+          +    /// portion is deliberately retained without guessing a local school timezone.
+          +    private static func validTimeSuffix(_ suffix: ArraySlice<UInt8>) -> Bool {
+          +        let bytes = Array(suffix)
+          +        guard bytes.count >= 6, bytes[0] == 84 || bytes[0] == 32 else { return false }
+          +        func number(_ start: Int, _ count: Int) -> Int? {
+          +            guard start + count <= bytes.count else { return nil }
+          +            var value = 0
+          +            for index in start..<(start + count) {
+          +                let byte = bytes[index]
+          +                guard (48...57).contains(byte) else { return nil }
+          +                value = value * 10 + Int(byte - 48)
+          +            }
+          +            return value
+          +        }
+          +        guard bytes[3] == 58, let hour = number(1, 2), hour < 24,
+          +              let minute = number(4, 2), minute < 60 else { return false }
+          +        var position = 6
+          +        var hasSeconds = false
+          +        if position < bytes.count && bytes[position] == 58 {
+          +            position += 1
+          +            guard let second = number(position, 2), second < 60 else { return false }
+          +            position += 2
+          +            hasSeconds = true
+          +        }
+          +        if position < bytes.count && bytes[position] == 46 {
+          +            guard hasSeconds else { return false }
+          +            position += 1
+          +            let first = position
+          +            while position < bytes.count && (48...57).contains(bytes[position]) { position += 1 }
+          +            guard position > first else { return false }
+          +        }
+          +        if position == bytes.count { return true }
+          +        if bytes[position] == 90 { return position + 1 == bytes.count } // UTC Z
+          +        if bytes[position] == 43 || bytes[position] == 45 {
+          +            guard position + 6 == bytes.count, bytes[position + 3] == 58,
+          +                  let offsetHour = number(position + 1, 2), offsetHour <= 14,
+          +                  let offsetMinute = number(position + 4, 2), offsetMinute < 60,
+          +                  (offsetHour < 14 || offsetMinute == 0) else { return false }
+          +            return true
+          +        }
+          +        return false
+          +    }
+          +
+               static func day(_ raw: String) -> String? {
+                   guard raw.utf8.count >= 10 else { return nil }
+                   let bytes = Array(raw.utf8)
+                   guard bytes[4] == 45, bytes[7] == 45,
+                         (0..<10).allSatisfy({ i in i == 4 || i == 7 || (48...57).contains(bytes[i]) }),
+          -              (bytes.count == 10 || bytes[10] == 84 || bytes[10] == 32) else { return nil }
+          +              (bytes.count == 10 || validTimeSuffix(bytes[10...])) else { return nil }
+                   let y = Int(raw.prefix(4))!, m = Int(raw.dropFirst(5).prefix(2))!, d = Int(raw.dropFirst(8).prefix(2))!
+          -        guard (1...12).contains(m), (1...31).contains(d) else { return nil }
+          +        guard y >= 1, (1...12).contains(m), (1...31).contains(d) else { return nil }
+                   var calendar = Calendar(identifier: .gregorian)
+                   calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+                   guard let date = calendar.date(from: DateComponents(year: y, month: m, day: d)),
+          @@ -131,7 +189,7 @@
+                   let bySubject = Dictionary(grouping: records, by: \.subjectId)
+                   let subjectsSummary = bySubject.map { subject, rows in
+                       DirectAttendanceSubjectStatistics(subjectId: subject,
+          -                name: subject.flatMap { subjects[$0] } ?? "Przedmiot nieustalony",
+          +                name: DirectAttendanceSubjectLabel.text(id: subject, names: subjects),
+                           counts: count(rows))
+                   }.sorted { a, b in
+                       let comparison = a.name.localizedStandardCompare(b.name)
+          --- a/Sources/DirectAttendanceAnalytics.swift
+          +++ b/Sources/DirectAttendanceAnalytics.swift
+          @@ -33,13 +33,14 @@
+           struct DirectAttendanceQuality: Equatable {
+               let records: Int
+               let unresolvedSubjects: Int
+          +    let missingSubjectNames: Int
+               let unknownSemesters: Int
+               let unknownLessonNumbers: Int
+               let invalidDates: Int
+               let repeatedLessonSlots: Int
+               let inconsistentTypeIds: Int
+               var hasCautions: Bool {
+          -        unresolvedSubjects > 0 || unknownSemesters > 0 || unknownLessonNumbers > 0 ||
+          +        unresolvedSubjects > 0 || missingSubjectNames > 0 || unknownSemesters > 0 || unknownLessonNumbers > 0 ||
+                   invalidDates > 0 || repeatedLessonSlots > 0 || inconsistentTypeIds > 0
+               }
+           }
+          @@ -106,7 +107,7 @@
+                   let cross = Dictionary(grouping: records) { CrossKey(subject: $0.subjectId, semester: $0.semester) }
+                   let subjectSemesters = cross.map { key, entries in
+                       DirectAttendanceSubjectSemesterStatistics(subjectId: key.subject,
+          -                subjectName: key.subject.flatMap { subjects[$0] } ?? "Przedmiot nieustalony",
+          +                subjectName: DirectAttendanceSubjectLabel.text(id: key.subject, names: subjects),
+                           semester: key.semester, counts: DirectAttendanceStatistics.count(entries))
+                   }.sorted { a, b in
+                       let order = a.subjectName.localizedStandardCompare(b.subjectName)
+          @@ -141,6 +142,10 @@
+                       .values.filter { Set($0.map { "\(DirectAttendanceStatus.normalized($0.typeName))|\($0.isPresenceKind)" }).count > 1 }.count
+                   let quality = DirectAttendanceQuality(records: records.count,
+                       unresolvedSubjects: records.filter { $0.subjectId == nil }.count,
+          +            missingSubjectNames: records.filter { record in
+          +                guard let id = record.subjectId else { return false }
+          +                return subjects[id]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+          +            }.count,
+                       unknownSemesters: records.filter { $0.semester == nil }.count,
+                       unknownLessonNumbers: records.filter { ($0.lessonNumber ?? 0) <= 0 }.count,
+                       invalidDates: records.filter { DirectAttendanceCalendar.day($0.date) == nil }.count,
+          --- a/Sources/DirectAttendanceAnalyticsView.swift
+          +++ b/Sources/DirectAttendanceAnalyticsView.swift
+          @@ -66,6 +66,9 @@
+                               if complete.quality.unresolvedSubjects > 0 {
+                                   Text("Bez powiązanego przedmiotu: \(complete.quality.unresolvedSubjects)")
+                               }
+          +                    if complete.quality.missingSubjectNames > 0 {
+          +                        Text("Znane ID bez nazwy przedmiotu: \(complete.quality.missingSubjectNames)")
+          +                    }
+                               if complete.quality.unknownSemesters > 0 {
+                                   Text("Bez semestru: \(complete.quality.unknownSemesters)")
+                               }
+          @@ -173,12 +176,18 @@
+                           ForEach(displayedRecords) { entry in
+                               VStack(alignment: .leading, spacing: 3) {
+                                   HStack {
+          -                            Text(entry.date).font(.subheadline.bold())
+          +                            if DirectAttendanceCalendar.day(entry.date) != nil {
+          +                                Text(entry.date).font(.subheadline.bold())
+          +                            } else {
+          +                                Text("Data nierozpoznana: \(entry.date)")
+          +                                    .font(.subheadline.bold()).foregroundStyle(.orange)
+          +                            }
+                                       Spacer()
+                                       Text(entry.typeName).font(.subheadline)
+                                           .foregroundStyle(entry.isPresenceKind ? .green : .red)
+                                   }
+          -                        Text(entry.subjectId.flatMap { subjects[$0] } ?? "Przedmiot nieustalony").font(.caption)
+          +                        Text(DirectAttendanceSubjectLabel.text(id: entry.subjectId, names: subjects))
+          +                            .font(.caption)
+                                   Text("Lekcja: \(entry.lessonNumber.map(String.init) ?? "nieustalona"), semestr: \(entry.semester.map(String.init) ?? "nieustalony")")
+                                       .font(.caption).foregroundStyle(.secondary)
+                               }.padding(.vertical, 3)
+          P29_PATCH
+          git apply <<'P29_PATCH'
+          --- a/Sources/DirectAttendanceStatistics.swift
+          +++ b/Sources/DirectAttendanceStatistics.swift
+          @@ -34,17 +34,75 @@
+               }
+           }
+           
+          +/// Keep a missing lesson->subject link distinct from a known subject ID whose
+          +/// display name was not returned. Neither case permits a fabricated subject.
+          +enum DirectAttendanceSubjectLabel {
+          +    static func text(id: String?, names: [String: String]) -> String {
+          +        guard let id, !id.isEmpty else { return "Przedmiot nieustalony (brak powiązania lekcji)" }
+          +        guard let name = names[id],
+          +              !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+          +            return "Nieznana nazwa przedmiotu (ID: \(id))"
+          +        }
+          +        return name
+          +    }
+          +}
+          +
+           enum DirectAttendanceCalendar {
+               /// Strict date portion: YYYY-MM-DD, optionally followed by T or a space and a time.
+               /// A malformed date must not be silently bucketed under a plausible month.
+          +    /// Reject malformed time tails rather than grouping e.g. T99:99 or Tabc as a valid day.
+          +    /// This checks syntax, not the timezone-adjusted calendar day: the server's date
+          +    /// portion is deliberately retained without guessing a local school timezone.
+          +    private static func validTimeSuffix(_ suffix: ArraySlice<UInt8>) -> Bool {
+          +        let bytes = Array(suffix)
+          +        guard bytes.count >= 6, bytes[0] == 84 || bytes[0] == 32 else { return false }
+          +        func number(_ start: Int, _ count: Int) -> Int? {
+          +            guard start + count <= bytes.count else { return nil }
+          +            var value = 0
+          +            for index in start..<(start + count) {
+          +                let byte = bytes[index]
+          +                guard (48...57).contains(byte) else { return nil }
+          +                value = value * 10 + Int(byte - 48)
+          +            }
+          +            return value
+          +        }
+          +        guard bytes[3] == 58, let hour = number(1, 2), hour < 24,
+          +              let minute = number(4, 2), minute < 60 else { return false }
+          +        var position = 6
+          +        var hasSeconds = false
+          +        if position < bytes.count && bytes[position] == 58 {
+          +            position += 1
+          +            guard let second = number(position, 2), second < 60 else { return false }
+          +            position += 2
+          +            hasSeconds = true
+          +        }
+          +        if position < bytes.count && bytes[position] == 46 {
+          +            guard hasSeconds else { return false }
+          +            position += 1
+          +            let first = position
+          +            while position < bytes.count && (48...57).contains(bytes[position]) { position += 1 }
+          +            guard position > first else { return false }
+          +        }
+          +        if position == bytes.count { return true }
+          +        if bytes[position] == 90 { return position + 1 == bytes.count } // UTC Z
+          +        if bytes[position] == 43 || bytes[position] == 45 {
+          +            guard position + 6 == bytes.count, bytes[position + 3] == 58,
+          +                  let offsetHour = number(position + 1, 2), offsetHour <= 14,
+          +                  let offsetMinute = number(position + 4, 2), offsetMinute < 60,
+          +                  (offsetHour < 14 || offsetMinute == 0) else { return false }
+          +            return true
+          +        }
+          +        return false
+          +    }
+          +
+               static func day(_ raw: String) -> String? {
+                   guard raw.utf8.count >= 10 else { return nil }
+                   let bytes = Array(raw.utf8)
+                   guard bytes[4] == 45, bytes[7] == 45,
+                         (0..<10).allSatisfy({ i in i == 4 || i == 7 || (48...57).contains(bytes[i]) }),
+          -              (bytes.count == 10 || bytes[10] == 84 || bytes[10] == 32) else { return nil }
+          +              (bytes.count == 10 || validTimeSuffix(bytes[10...])) else { return nil }
+                   let y = Int(raw.prefix(4))!, m = Int(raw.dropFirst(5).prefix(2))!, d = Int(raw.dropFirst(8).prefix(2))!
+          -        guard (1...12).contains(m), (1...31).contains(d) else { return nil }
+          +        guard y >= 1, (1...12).contains(m), (1...31).contains(d) else { return nil }
+                   var calendar = Calendar(identifier: .gregorian)
+                   calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+                   guard let date = calendar.date(from: DateComponents(year: y, month: m, day: d)),
+          @@ -131,7 +189,7 @@
+                   let bySubject = Dictionary(grouping: records, by: \.subjectId)
+                   let subjectsSummary = bySubject.map { subject, rows in
+                       DirectAttendanceSubjectStatistics(subjectId: subject,
+          -                name: subject.flatMap { subjects[$0] } ?? "Przedmiot nieustalony",
+          +                name: DirectAttendanceSubjectLabel.text(id: subject, names: subjects),
+                           counts: count(rows))
+                   }.sorted { a, b in
+                       let comparison = a.name.localizedStandardCompare(b.name)
+          --- a/Sources/DirectAttendanceAnalytics.swift
+          +++ b/Sources/DirectAttendanceAnalytics.swift
+          @@ -33,13 +33,14 @@
+           struct DirectAttendanceQuality: Equatable {
+               let records: Int
+               let unresolvedSubjects: Int
+          +    let missingSubjectNames: Int
+               let unknownSemesters: Int
+               let unknownLessonNumbers: Int
+               let invalidDates: Int
+               let repeatedLessonSlots: Int
+               let inconsistentTypeIds: Int
+               var hasCautions: Bool {
+          -        unresolvedSubjects > 0 || unknownSemesters > 0 || unknownLessonNumbers > 0 ||
+          +        unresolvedSubjects > 0 || missingSubjectNames > 0 || unknownSemesters > 0 || unknownLessonNumbers > 0 ||
+                   invalidDates > 0 || repeatedLessonSlots > 0 || inconsistentTypeIds > 0
+               }
+           }
+          @@ -106,7 +107,7 @@
+                   let cross = Dictionary(grouping: records) { CrossKey(subject: $0.subjectId, semester: $0.semester) }
+                   let subjectSemesters = cross.map { key, entries in
+                       DirectAttendanceSubjectSemesterStatistics(subjectId: key.subject,
+          -                subjectName: key.subject.flatMap { subjects[$0] } ?? "Przedmiot nieustalony",
+          +                subjectName: DirectAttendanceSubjectLabel.text(id: key.subject, names: subjects),
+                           semester: key.semester, counts: DirectAttendanceStatistics.count(entries))
+                   }.sorted { a, b in
+                       let order = a.subjectName.localizedStandardCompare(b.subjectName)
+          @@ -141,6 +142,10 @@
+                       .values.filter { Set($0.map { "\(DirectAttendanceStatus.normalized($0.typeName))|\($0.isPresenceKind)" }).count > 1 }.count
+                   let quality = DirectAttendanceQuality(records: records.count,
+                       unresolvedSubjects: records.filter { $0.subjectId == nil }.count,
+          +            missingSubjectNames: records.filter { record in
+          +                guard let id = record.subjectId else { return false }
+          +                return subjects[id]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+          +            }.count,
+                       unknownSemesters: records.filter { $0.semester == nil }.count,
+                       unknownLessonNumbers: records.filter { ($0.lessonNumber ?? 0) <= 0 }.count,
+                       invalidDates: records.filter { DirectAttendanceCalendar.day($0.date) == nil }.count,
+          --- a/Sources/DirectAttendanceAnalyticsView.swift
+          +++ b/Sources/DirectAttendanceAnalyticsView.swift
+          @@ -66,6 +66,9 @@
+                               if complete.quality.unresolvedSubjects > 0 {
+                                   Text("Bez powiązanego przedmiotu: \(complete.quality.unresolvedSubjects)")
+                               }
+          +                    if complete.quality.missingSubjectNames > 0 {
+          +                        Text("Znane ID bez nazwy przedmiotu: \(complete.quality.missingSubjectNames)")
+          +                    }
+                               if complete.quality.unknownSemesters > 0 {
+                                   Text("Bez semestru: \(complete.quality.unknownSemesters)")
+                               }
+          @@ -173,12 +176,18 @@
+                           ForEach(displayedRecords) { entry in
+                               VStack(alignment: .leading, spacing: 3) {
+                                   HStack {
+          -                            Text(entry.date).font(.subheadline.bold())
+          +                            if DirectAttendanceCalendar.day(entry.date) != nil {
+          +                                Text(entry.date).font(.subheadline.bold())
+          +                            } else {
+          +                                Text("Data nierozpoznana: \(entry.date)")
+          +                                    .font(.subheadline.bold()).foregroundStyle(.orange)
+          +                            }
+                                       Spacer()
+                                       Text(entry.typeName).font(.subheadline)
+                                           .foregroundStyle(entry.isPresenceKind ? .green : .red)
+                                   }
+          -                        Text(entry.subjectId.flatMap { subjects[$0] } ?? "Przedmiot nieustalony").font(.caption)
+          +                        Text(DirectAttendanceSubjectLabel.text(id: entry.subjectId, names: subjects))
+          +                            .font(.caption)
+                                   Text("Lekcja: \(entry.lessonNumber.map(String.init) ?? "nieustalona"), semestr: \(entry.semester.map(String.init) ?? "nieustalony")")
+                                       .font(.caption).foregroundStyle(.secondary)
+                               }.padding(.vertical, 3)
+          P29_PATCH
+          echo '43faf5df7f11104808cd8005a350eadc7b7066aeffad18aa8c35e456feae2374  Sources/DirectAttendanceStatistics.swift' | shasum -a 256 -c -
+          echo '7451b8b1a9a1612e46b5e487af7f9a73ffc016c63f9a0d3ea2aa1a117e96ba45  Sources/DirectAttendanceAnalytics.swift' | shasum -a 256 -c -
+          echo '356b7059f8ffdd2110016ea401b7c9998c9a9218aa43977835f207335aa86d1d  Sources/DirectAttendanceAnalyticsView.swift' | shasum -a 256 -c -
+          echo 'Verified P29 source hashes against clean-tested source release.'
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Generate Xcode project from P28
+      - name: Generate Xcode project from P29
         working-directory: synergia-direct-ios
         run: xcodegen generate
       - name: Build unsigned iPhone IPA application
@@ -38,20 +371,20 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-      - name: Package unsigned P28 IPA
+      - name: Package unsigned P29 IPA
         working-directory: synergia-direct-ios
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
-          zip -qr SYNERGIA_DIRECT_v031_P28_UNSIGNED.ipa Payload
-          unzip -tq SYNERGIA_DIRECT_v031_P28_UNSIGNED.ipa
-          shasum -a 256 SYNERGIA_DIRECT_v031_P28_UNSIGNED.ipa
-      - name: Upload P28 IPA
+          zip -qr SYNERGIA_DIRECT_v031_P29_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v031_P29_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v031_P29_UNSIGNED.ipa
+      - name: Upload P29 IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SYNERGIA_DIRECT_v031_P28_UNSIGNED_IPA
-          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P28_UNSIGNED.ipa
+          name: SYNERGIA_DIRECT_v031_P29_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P29_UNSIGNED.ipa
           if-no-files-found: error
           retention-days: 14
