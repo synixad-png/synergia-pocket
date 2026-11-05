@@ -565,6 +565,29 @@ jobs:
           P32_SHA
           swiftc -frontend -parse Sources/*.swift
           echo 'P32 in-app official school login and P31 base SHA-verified'
+      - name: Permit exact official fallback login hosts (P32 security gate)
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          p = Path('Sources/Models.swift')
+          before = p.read_bytes()
+          assert hashlib.sha256(before).hexdigest() == '0ba7c99f7c8573712c35a10dbf42990d493255fba7ac988242a95850b213d877'
+          old = '''        return h == "librus.pl" || h.hasSuffix(".librus.pl")'''
+          new = '''        // The official school-login fallback uses librus.com.pl, not librus.pl.
+          // Allow only the exact official hosts; never allow arbitrary *.com.pl.
+          return h == "librus.pl" || h.hasSuffix(".librus.pl") ||
+                 h == "librus.com.pl" || h == "www.librus.com.pl"'''
+          data = before.decode('utf-8')
+          assert data.count(old) == 1, 'Unexpected portal-policy source'
+          p.write_text(data.replace(old,new))
+          assert hashlib.sha256(p.read_bytes()).hexdigest() == 'c1fa854d22d4c539cd72a195df8ee336d904824fae1afbfde217584979acd7e0'
+          print('P32 fallback allow-list restricted to official exact domains')
+          PY
+          swiftc -frontend -parse Sources/*.swift
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project from verified P32
