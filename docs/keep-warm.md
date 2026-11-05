@@ -3,12 +3,14 @@
 Od 5 listopada 2026 zadanie działa niezależnie od GitHub Actions.
 
 - Projekt Netlify: synergia-pocket-heartbeat (istniejący darmowy plan zespołu synixad).
-- Źródła: gałąź ops/heartbeat-netlify, commit 2382a468c65da83985cd9c0d68031a2f1496392f.
+- Źródła: gałąź ops/heartbeat-netlify, commit 545282809863a260624e0edf1a36d8ec52c5fda2.
 - Funkcja: keep-warm, produkcyjny harmonogram `3,13,23,33,43,53 * * * *` (UTC). Odstęp 10 minut, codziennie i przez całą dobę.
-- Cel: GET https://synergia-pocket.onrender.com/api/health. Pocket TEST pozostaje bez podtrzymywania.
+- Cele: keep-warm → GET https://synergia-pocket.onrender.com/api/health; keep-warm-test → GET https://synergia-pocket-own-api-test.onrender.com/api/health. Każda funkcja ma osobny harmonogram co 10 minut przez całą dobę i osobny limit żądania; błąd jednego serwera nie blokuje drugiego.
 - Brak haseł, ciasteczek, danych kont szkolnych i sekretów w zadaniu.
-- Sprawdzana jest odpowiedź JSON status=ok, service=synergia-pocket; błędne statusy HTTP powodują błąd funkcji.
+- Sprawdzana jest odpowiedź JSON status=ok i właściwy service (synergia-pocket lub synergia-pocket-own-api); błędne statusy HTTP powodują błąd funkcji.
 - Potwierdzenie: ręczne uruchomienie 16:22:14 i automatyczne 16:23:04 Europe/Warsaw; obydwa zakończone heartbeat ok=true i odpowiadającymi wpisami Render GET /api/health 200 OK.
+
+- Pocket TEST: produkcyjne wdrożenie 6aeca588e50896fe4ad0b736, ręczne wykonanie 16:52 Europe/Warsaw zakończone heartbeat-test ok=true. Obie funkcje mają status Scheduled.
 
 ## Poprzedni mechanizm
 
