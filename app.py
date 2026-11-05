@@ -47,7 +47,13 @@ async def lifespan(_app):
         else:
             print("INFO: Magazyn sesji Redis: PING i zapis/odczyt OK", flush=True)
     PUSH_SERVICE.start()
+    maintenance = asyncio.create_task(maintain_sessions())
     yield
+    maintenance.cancel()
+    try:
+        await maintenance
+    except asyncio.CancelledError:
+        pass
     await PUSH_SERVICE.close()
     for token in list(SESSIONS):
         session = SESSIONS.pop(token)
@@ -59,7 +65,7 @@ async def lifespan(_app):
 app = FastAPI(title="Synergia Pocket", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 SECTIONS = {"grades", "timetable", "attendance", "agenda", "homework", "messages", "notes", "announcements"}
-SESSION_IDLE = 7 * 24 * 60 * 60  # 7 dni, odnawiane podczas aktywnego korzystania
+SESSION_IDLE = 365 * 24 * 60 * 60  # rok, odnawiany podczas aktywnego korzystania
 CACHE_SECONDS = 180
 MAX_PROFILES = 2
 # Ustaw SYNERGIA_FORCE_HTTPS=1 na hostingu za terminatorem TLS.
@@ -258,6 +264,42 @@ async def save_session(token: str, session: Session) -> None:
         LOG.warning("Nie udało się zapisać sesji: %s", type(exc).__name__)
 
 
+async def confirm_old_provider_cookie(profile: Profile) -> None:
+    """A provider response outranks the SDK's conservative local age estimate."""
+    low = getattr(profile.librus, "client", None)
+    valid = getattr(low, "is_session_valid", None)
+    check = getattr(low, "async_get_me", None)
+    import_data = getattr(low, "import_session", None)
+    if not (callable(valid) and callable(check) and callable(import_data)) or valid():
+        return
+    raw = await check()  # raises on real provider rejection or network failure
+    if not isinstance(raw, dict) or not isinstance(raw.get("Me"), dict):
+        raise error(503, "Nie można teraz potwierdzić zapisanej sesji.")
+    from librus_synergia import LibrusSessionData
+    data = profile.librus.session_data
+    import_data(LibrusSessionData(cookies=data.cookies, logged_in_at=time.time()))
+
+
+async def maintain_sessions() -> None:
+    """Renew each profile independently; a network failure never deletes a session."""
+    while True:
+        await asyncio.sleep(10 * 60)
+        for token, session in list(SESSIONS.items()):
+            async with session.lock:
+                if SESSIONS.get(token) is not session:
+                    continue
+                for profile in session.profiles.values():
+                    if profile.mode != "live":
+                        continue
+                    try:
+                        async with asyncio.timeout(20):
+                            await confirm_old_provider_cookie(profile)
+                            await profile.librus.login()
+                    except Exception as exc:
+                        LOG.info("Nie odnowiono chwilowo sesji profilu: %s", type(exc).__name__)
+                await save_session(token, session)
+
+
 async def delete_saved_session(token: str) -> None:
     if STORE is None or not token:
         return
@@ -284,15 +326,10 @@ async def restore_cookie_session(token: str) -> Session | None:
         if session is None:
             await delete_saved_session(token)
             return None
-        # Przed odczytem profilu próbujemy bezhasłowego refreshToken.
-        # Jeśli się nie uda, nie wysyłamy pustego hasła do Librusa.
+        # Let the SDK renew older cookies. A refresh response without a new
+        # token does not prove that an existing session has expired.
         try:
-            low_client = getattr(session.active.librus, "client", None)
-            refresh = getattr(low_client, "async_refresh_session", None)
-            if callable(refresh) and not await refresh():
-                await close_session_clients(session)
-                await delete_saved_session(token)
-                return None
+            await confirm_old_provider_cookie(session.active)
             await session.active.librus.me()
         except Exception as exc:
             await close_session_clients(session)
@@ -411,6 +448,7 @@ async def session_info(request: Request):
         login = getattr(session.active.librus, "login", None) if session.mode == "live" else None
         if callable(login):
             try:
+                await confirm_old_provider_cookie(session.active)
                 await login()
             except Exception as exc:
                 from librus_synergia.exceptions import LibrusAuthError

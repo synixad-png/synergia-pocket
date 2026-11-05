@@ -151,7 +151,7 @@ def test_two_profiles_survive_backend_restart_without_saved_password(monkeypatch
         assert restored.status_code == 200, restored.text
         assert restored.json()["authenticated"] is True
         assert len(restored.json()["profiles"]) == 2
-        assert "max-age=604800" in restored.headers["set-cookie"].lower()
+        assert "max-age=31536000" in restored.headers["set-cookie"].lower()
         active = next(iter(module.SESSIONS.values())).active
         assert active.librus.password == ""  # hasło NIE jest zapisywane do Redis
         assert active.librus.login_calls == 1  # odświeżenie przy otwarciu
@@ -209,3 +209,38 @@ def test_real_librus_session_import_export_without_network():
         finally:
             await client.close()
     asyncio.run(check())
+
+
+def test_refresh_failure_does_not_delete_working_provider_session(monkeypatch):
+    Fake = install_mock_librus(monkeypatch)
+    class Low:
+        async def async_refresh_session(self):
+            raise AssertionError('Do not force refresh before validating existing cookies')
+    monkeypatch.setattr(Fake, 'client', Low(), raising=False)
+    db = FakeRedis()
+    store = RedisSessionStore(db, Fernet.generate_key())
+    monkeypatch.setattr(module, 'STORE', store)
+    module.SESSIONS.clear()
+    with TestClient(module.app) as c:
+        assert c.post('/api/login', json={'login':'h','password':'ok'}).status_code == 200
+        module.SESSIONS.clear()
+        assert c.get('/api/session').json()['authenticated']
+        assert db.data
+    module.SESSIONS.clear()
+
+
+def test_old_cookie_is_validated_by_provider_before_local_reauthentication(monkeypatch):
+    import asyncio
+    Fake = install_mock_librus(monkeypatch)
+    client = Fake('h', '')
+    class Low:
+        def is_session_valid(self): return False
+        async def async_get_me(self): return {'Me': {'Id': 1}}
+        def import_session(self, data): self.saved = data
+    low = Low()
+    monkeypatch.setattr(client, 'client', low, raising=False)
+    profile = module.Profile(id='one', name='One', mode='live', librus=client)
+    asyncio.run(module.confirm_old_provider_cookie(profile))
+    assert low.saved.cookies == client.session_data.cookies
+    assert low.saved.logged_in_at > time.time()-5
+    assert client.password == '' and client.login_calls == 0

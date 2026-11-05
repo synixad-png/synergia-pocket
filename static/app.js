@@ -327,6 +327,6 @@ window.SynergiaPushApp = {
     }
   }
 };
-async function init() { initEvents(); try { const user=await request('/api/session'); if(user.authenticated)showApp(user); else showAuth(); } catch {showAuth();} }
+async function init() { initEvents(); try { const user=await request('/api/session'); if(user.authenticated)showApp(user); else showAuth(); } catch(ex) {showAuth();$('login-error').textContent='Nie można teraz wznowić sesji. Odśwież aplikację, aby spróbować ponownie. '+errDetail(ex);} }
 init();
 
