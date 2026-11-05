@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const labels = { dashboard:'Oś czasu', timetable:'Plan lekcji', grades:'Oceny', attendance:'Frekwencja', agenda:'Terminarz', homework:'Zadania domowe', messages:'Wiadomości', notes:'Uwagi', announcements:'Ogłoszenia', 'school-files':'Dokumenty szkoły', 'canteen-sp3':'Stołówka SP3' };
 const today = new Date();
-const state = { user:null, page:'dashboard', week: monday(today), mailbox:'inbox', loading:0, messageEpoch:0, messages:[], refresh:false, profileFormMode:'add', selectedDayIndex:Math.min(4,Math.max(0,(today.getDay()+6)%7)) };
+const state = { user:null, page:'dashboard', week: monday(today), mailbox:'inbox', loading:0, messageEpoch:0, messages:[], refresh:false, profileFormMode:'add', gradeDetails:[], selectedDayIndex:Math.min(4,Math.max(0,(today.getDay()+6)%7)) };
 const plDate = new Intl.DateTimeFormat('pl-PL',{day:'numeric',month:'long',year:'numeric'});
 const plShort = new Intl.DateTimeFormat('pl-PL',{day:'numeric',month:'short'});
 const weekday = new Intl.DateTimeFormat('pl-PL',{weekday:'short'});
@@ -55,7 +55,7 @@ function renderProfileMenu() {
   $('rename-profile-btn').disabled=!activeId;
 }
 function showAuth() {
-  ++state.loading; ++state.messageEpoch; state.messages=[]; state.user=null;
+  ++state.loading; ++state.messageEpoch; state.messages=[]; state.gradeDetails=[]; state.user=null;
   closeProfileOverlay(); closeDialog();
   $('auth').classList.remove('hidden'); $('workspace').classList.add('hidden'); $('password').value='';
 }
@@ -106,14 +106,15 @@ async function logout() { try {await request('/api/logout',{method:'POST'});} ca
 function closeSidebar() { $('sidebar').classList.remove('open'); $('sidebar-mask').classList.add('hidden'); }
 async function navigate(page, opt={}) {
   if(!labels[page]) return;
+  closeGradeDetails(); state.gradeDetails=[];
   state.page=page; $('breadcrumb-name').textContent=labels[page]; closeSidebar();
   document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
   $('content').innerHTML='<div class="loading">Pobieranie danych…</div>';
   const seq=++state.loading;
   try {
-    let html;
+    let html, gradeData;
     if(page==='dashboard') html=await dashboard();
-    else if(page==='grades') html=renderGrades(await section('grades'));
+    else if(page==='grades') {gradeData=await section('grades');html=renderGrades(gradeData);}
     else if(page==='timetable') { const [plan,grades]=await Promise.all([section('timetable',{week:iso(state.week)}),section('grades').catch(()=>null)]); html=renderTimetable(plan); opt.timetableExtras={plan,grades}; }
     else if(page==='attendance') html=renderAttendance(await section('attendance'));
     else if(page==='agenda') html=renderAgenda(await section('agenda'));
@@ -123,7 +124,7 @@ async function navigate(page, opt={}) {
     else if(page==='announcements') html=renderAnnouncements(await section('announcements'));
     else if(page==='school-files') html=await window.SynergiaSchoolFiles.view(request);
     else if(page==='canteen-sp3') html=await window.SynergiaCanteenSP3.view(request);
-    if(seq===state.loading) { $('content').innerHTML=html; document.querySelectorAll('.donut[data-pct]').forEach(el=>el.style.setProperty('--percentage',el.dataset.pct+'%')); if(page==='timetable') { window.SynergiaTimetable?.enhance(opt.timetableExtras?.plan,opt.timetableExtras?.grades); window.SynergiaLessonClock?.update(); } }
+    if(seq===state.loading) { if(page==='grades')state.gradeDetails=(gradeData.subjects||[]).flatMap(subject=>(subject.grades||[]).map(grade=>({...grade,subject:subject.name}))); $('content').innerHTML=html; document.querySelectorAll('.donut[data-pct]').forEach(el=>el.style.setProperty('--percentage',el.dataset.pct+'%')); if(page==='timetable') { window.SynergiaTimetable?.enhance(opt.timetableExtras?.plan,opt.timetableExtras?.grades); window.SynergiaLessonClock?.update(); } }
     return true;
   } catch(ex) {
     if(seq===state.loading) $('content').innerHTML=head(labels[page],'Nie udało się pobrać danych.')+`<div class="error-box">${esc(errDetail(ex))}</div><p><button class="button button-outline button-sm" data-action="retry">Spróbuj ponownie</button></p>`;
@@ -163,14 +164,34 @@ async function dashboard() {
 }
 function gradeKindClass(value) { const n=parseInt(value,10); return n<=2?'low':n===3?'mid':n>=5?'good':''; }
 function renderGrades(d) {
+  let gradeIndex=0;
   const cards=(d.subjects||[]).map(s=>`<article class="subject-card"><h3>${esc(s.name)}</h3><div class="grade-chip-row">${(s.grades||[]).map(g=>{
     const value=g.source==='point'&&g.max_points!=null?String(g.points??g.value)+' / '+g.max_points+' pkt':String(g.value||'Opis');
     const long=value.length>5||g.source==='text';
-    return `<div class="grade-chip ${long?'grade-chip-long':gradeKindClass(g.value)}" title="${esc(g.category)} · ${dateLabel(g.date)}"><span>${esc(value)}</span><small>${esc(g.source_label||'Klasyczne')} · ${esc(g.category||'Ocena')}${g.weight==null?'':' · waga '+esc(g.weight)}</small>${(g.comments||[]).length?`<small>${esc(g.comments.join(' · '))}</small>`:''}</div>`;
+    return `<button type="button" data-action="grade-detail" data-index="${gradeIndex++}" aria-haspopup="dialog" class="grade-chip ${long?'grade-chip-long':gradeKindClass(g.value)}" title="${esc(g.category)} · ${dateLabel(g.date)}"><span>${esc(value)}</span><small>${esc(g.source_label||'Klasyczne')} · ${esc(g.category||'Ocena')}${g.weight==null?'':' · waga '+esc(g.weight)}</small>${(g.comments||[]).length?`<small>${esc(g.comments.join(' · '))}</small>`:''}<small class="grade-open-hint">Pokaż szczegóły →</small></button>`;
   }).join('')}</div><div class="grade-foot">${esc(s.grades?.length||0)} ocen</div></article>`).join('');
   const sources=(d.sources||[]).map(s=>`${esc(s.label)}: ${s.state==='unavailable'?'niedostępne':s.state==='failed'||s.state==='unsupported'?'błąd':esc(s.count)}`).join(' · ');
   const warning=(d.warnings||[]).length?`<div class="error-box" role="status">Niepełny odczyt: ${(d.warnings||[]).map(esc).join(' ')}</div>`:'';
   return head('Oceny',`Wszystkie pobrane oceny: ${d.count??0}. Bez filtrowania semestru i bez wyliczania niepotwierdzonej średniej.`)+warning+(sources?`<p class="grades-sources">${sources}</p>`:'')+`<div class="subject-grid">${cards||empty('Brak pobranych ocen.')}</div>`;
+}
+let gradeReturnFocus=null, gradePreviousOverflow='';
+function gradeDetailText(value) { return typeof value==='string'?value:JSON.stringify(value,null,2)??''; }
+function openGradeDetails(index) {
+  const grade=state.gradeDetails[index];
+  if(!grade||!state.user||state.page!=='grades')return;
+  const dialog=$('grade-dialog');
+  gradeReturnFocus=document.activeElement; gradePreviousOverflow=document.body.style.overflow;
+  const value=grade.source==='point'&&grade.max_points!=null?String(grade.points??grade.value)+' / '+grade.max_points+' pkt':String(grade.value||'Brak treści oceny.');
+  const meta=[['Przedmiot',grade.subject],['Data',dateLabel(grade.date)],['Rodzaj',grade.kind],['Kategoria',grade.category],['Źródło',grade.source_label],['Semestr',grade.semester],['Waga',grade.weight]].filter(([,v])=>v!=null&&v!=='');
+  const paragraphs=(title,values)=>Array.isArray(values)&&values.length?'<section><h3>'+esc(title)+'</h3>'+values.map(v=>'<p class="grade-detail-text">'+esc(gradeDetailText(v))+'</p>').join('')+'</section>':'';
+  $('grade-detail-body').innerHTML='<h2 id="grade-detail-title">'+esc(grade.subject||'Szczegóły oceny')+'</h2><div class="grade-detail-value">'+esc(value)+'</div><dl class="grade-detail-meta">'+meta.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>'+paragraphs('Komentarze',grade.comments)+paragraphs('Wymagania',grade.requirements);
+  dialog.classList.remove('hidden');document.body.style.overflow='hidden';
+  dialog.querySelector('.grade-dialog-box').scrollTop=0;$('grade-detail-back').focus();
+}
+function closeGradeDetails() {
+  const dialog=$('grade-dialog');if(!dialog||dialog.classList.contains('hidden'))return;
+  dialog.classList.add('hidden');$('grade-detail-body').replaceChildren();document.body.style.overflow=gradePreviousOverflow;
+  if(gradeReturnFocus?.isConnected)gradeReturnFocus.focus();gradeReturnFocus=null;
 }
 function renderTimetable(d) {
   const end=addDays(state.week,4);
@@ -225,7 +246,7 @@ async function openMessage(i) {
     }
   } catch(e) { if(epoch===state.messageEpoch) $('dialog-body').innerHTML=`<div class="error-box">${esc(errDetail(e))}</div>`; }
 }
-function closeDialog() { window.SynergiaMessageAttachments?.clear(); $('message-dialog').classList.add('hidden'); }
+function closeDialog() { closeGradeDetails(); window.SynergiaMessageAttachments?.clear(); $('message-dialog').classList.add('hidden'); }
 function initEvents() {
   // Przełącznik wyglądu jest dostępny również przed logowaniem.
   document.addEventListener('click', (event) => {
@@ -288,6 +309,11 @@ function initEvents() {
   $('refresh').addEventListener('click',async()=>{state.refresh=true; if(await navigate(state.page)) statusToast('Dane zostały odświeżone.');});
   $('menu-btn').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebar-mask').classList.remove('hidden');});
   $('sidebar-mask').addEventListener('click',closeSidebar);
+  $('grade-detail-close').addEventListener('click',closeGradeDetails);
+  $('grade-detail-back').addEventListener('click',closeGradeDetails);
+  $('grade-detail-bottom').addEventListener('click',closeGradeDetails);
+  $('grade-dialog').addEventListener('click',e=>{if(e.target===$('grade-dialog'))closeGradeDetails();});
+  $('grade-dialog').addEventListener('keydown',e=>{if(e.key==='Tab'){const nodes=[$('grade-detail-back'),$('grade-detail-close'),$('grade-detail-bottom')];const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
   $('dialog-close').addEventListener('click',closeDialog);
   $('message-dialog').addEventListener('click',e=>{if(e.target===$('message-dialog'))closeDialog();});
   window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDialog();closeProfileOverlay();document.querySelectorAll('.theme-menu').forEach(menu=>menu.classList.add('hidden'));}});
@@ -302,6 +328,7 @@ function initEvents() {
     else if(action==='week-prev'||action==='week-next'){state.week=addDays(state.week,action==='week-prev'?-7:7);navigate('timetable');}
     else if(action==='week-today'){state.week=monday(new Date());state.selectedDayIndex=Math.min(4,Math.max(0,(new Date().getDay()+6)%7));navigate('timetable');}
     else if(action==='inbox'||action==='outbox'){state.mailbox=action;navigate('messages');}
+    else if(action==='grade-detail')openGradeDetails(Number(btn.dataset.index));
     else if(action==='message')openMessage(Number(btn.dataset.index));
     else if(action==='compose-new') window.SynergiaMessaging.compose({id:state.user.active_profile_id,name:state.user.name},()=>navigate('messages'));
     else if(action==='retry')navigate(state.page);

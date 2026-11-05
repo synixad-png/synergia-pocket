@@ -319,3 +319,17 @@ html[data-theme="dark"] .lesson-live-marker{box-shadow:0 0 0 1px #ff7782}
 
 /* Complete grade sources: text/descriptive entries must not be clipped to a numeric chip. */
 .grade-chip-long{flex:1 1 100%;max-width:100%;width:auto;align-items:flex-start;text-align:left;padding:13px;font-size:14px;line-height:1.6;overflow-wrap:anywhere}.grade-chip-long span{white-space:pre-wrap}.grade-chip small{max-width:100%;white-space:normal;overflow-wrap:anywhere}.grades-sources{color:var(--muted,#8493ab);font-size:12px;line-height:1.8;margin:12px 0 20px}
+
+/* Full grade details, including long descriptive assessments. */
+button.grade-chip{border:1px solid transparent;font-family:inherit;max-width:100%;text-align:center}
+button.grade-chip:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+button.grade-chip.grade-chip-long{text-align:left}
+.grade-open-hint{font-size:10px;font-weight:600;margin-top:5px}
+.grade-dialog-box{background:var(--surface,#fff);color:var(--ink);width:min(720px,100%);max-height:90dvh;overscroll-behavior:contain;overflow-y:auto;overflow-wrap:anywhere}
+.grade-dialog-top{position:sticky;top:0;z-index:1;background:var(--surface,#fff);padding:10px 0;gap:10px}
+.grade-dialog-top .button{min-height:44px}
+.grade-detail-value,.grade-detail-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;text-align:left;color:var(--ink);font-size:15px}
+.grade-detail-value{padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface2,#f6f8fc);margin:16px 0}
+.grade-detail-meta{margin:20px 0}.grade-detail-meta>div{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px;margin:9px 0}.grade-detail-meta dt{font-weight:700}.grade-detail-meta dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+#grade-detail-bottom{margin-top:20px;min-height:44px}
+@media(max-width:620px){.grade-dialog-box{max-height:94dvh;padding:18px 15px}.grade-dialog-top{top:0}.grade-detail-meta>div{grid-template-columns:80px minmax(0,1fr)}}

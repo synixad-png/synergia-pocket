@@ -39,6 +39,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Check push registration status and persistent errors
         run: python tests/browser_push_status_check.py
+      - name: Check full grade details and return navigation on mobile and desktop
+        run: python tests/browser_grade_details_check.py
       - name: Check real dark/light text contrast on mobile and desktop
         run: python tests/browser_theme_check.py
       - name: Check school document download in real Chromium (mobile and desktop)
