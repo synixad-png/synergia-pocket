@@ -170,6 +170,11 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method", 405)
 		return
 	}
+	bootstrap := r.URL.Path == "/api/session/bootstrap"
+	if bootstrap && r.Method != "POST" {
+		http.Error(w, "Method", 405)
+		return
+	}
 	var key string
 	if cookie, e := r.Cookie("synergia_local"); e == nil && len(cookie.Value) == 64 {
 		key = cookie.Value
@@ -194,6 +199,14 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		session = nil
 	}
 	if session == nil && r.URL.Path == "/" {
+		// Never overwrite a Strict cookie omitted on a cross-site landing.
+		// The same-origin API bootstrap can see it and restore its profiles.
+		c.mu.Unlock()
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(c.html))
+		return
+	}
+	if session == nil && bootstrap {
 		if len(c.sessions) >= 200 {
 			c.mu.Unlock()
 			http.Error(w, "Aplikacja jest zajęta. Spróbuj później.", 503)
@@ -220,6 +233,10 @@ func (c *cloudApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(c.html))
+		return
+	}
+	if bootstrap {
+		serveJSON(w, 200, map[string]bool{"ok": true})
 		return
 	}
 	if r.URL.Path == "/api/exit" {

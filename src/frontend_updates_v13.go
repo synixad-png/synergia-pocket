@@ -59,6 +59,33 @@ const updatesJSV13 = `
  async function open(section){leave();chosen=host.profile();mode=section;abort=new AbortController();host.header(section==='updates'?'Powiadomienia':'Kontrola API','Profil '+(chosen+1)+' — niezależna kontrola danych.');const wrap=root();if(!host.logged()){wrap.append(el('p','Najpierw zaloguj wybrany profil.'));return;}if(section==='updates')await refresh();else renderHealth();}
  setInterval(async()=>{if(!host.logged())return;if(mode==='updates'){await refresh();return;}const profile=host.profile();try{const data=await request('/api/updates/state',profile);if(profile===host.profile())badge(data.unread);}catch(_){}},10000);
  window.SynergiaUpdatesV13={open,leave};
- fetch('/api/updates/profiles',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(data=>{if(Array.isArray(data?.logged)&&data.logged.length===2)host.restore(data.logged);}).catch(()=>{});
+ let resumePending=null;
+ async function resumeProfiles(){
+   if(resumePending)return resumePending;
+   resumePending=(async()=>{
+     for(let attempt=0;attempt<3;attempt++){
+       const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),15000);
+       try{
+         let res=await fetch('/api/updates/profiles',{credentials:'same-origin',cache:'no-store',signal:ctrl.signal});
+         if(res.status===401){
+           const boot=await fetch('/api/session/bootstrap',{method:'POST',credentials:'same-origin',cache:'no-store',signal:ctrl.signal});
+           if(!boot.ok)throw Error('Nie można teraz wznowić sesji.');
+           res=await fetch('/api/updates/profiles',{credentials:'same-origin',cache:'no-store',signal:ctrl.signal});
+         }
+         if(!res.ok)throw Error('Nie można teraz odczytać zapisanych profili.');
+         const data=await res.json();if(!Array.isArray(data?.logged)||data.logged.length!==2)throw Error('Nieprawidłowy stan zapisanej sesji.');
+         host.restore(data.logged);return;
+       }catch(e){
+         if(attempt===2){host.status('Nie udało się wznowić sesji. Zapis nie został usunięty. Spróbuj ponownie otworzyć aplikację.','error');return;}
+       }finally{clearTimeout(timer);}
+       await new Promise(resolve=>setTimeout(resolve,1000*(attempt+1)));
+     }
+   })();
+   try{return await resumePending;}finally{resumePending=null;}
+ }
+ window.PocketSession={resume:resumeProfiles};
+ window.addEventListener('pageshow',resumeProfiles);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)resumeProfiles();});
+ resumeProfiles();
 })();
 `

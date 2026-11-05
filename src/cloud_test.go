@@ -31,7 +31,7 @@ func cloudTest(t *testing.T) *cloudApp {
 }
 func cloudNewBrowser(t *testing.T, app *cloudApp) *http.Cookie {
 	t.Helper()
-	w := cloudRequest(t, app, "GET", "/", nil, "")
+	w := cloudRequest(t, app, "POST", "/api/session/bootstrap", nil, app.origin)
 	if w.Code != 200 || len(w.Result().Cookies()) != 1 {
 		t.Fatal(w.Code, w.Body)
 	}
@@ -165,7 +165,7 @@ func TestCloudSessionCapacityBounded(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		cloudNewBrowser(t, app)
 	}
-	w := cloudRequest(t, app, "GET", "/", nil, "")
+	w := cloudRequest(t, app, "POST", "/api/session/bootstrap", nil, app.origin)
 	if w.Code != 503 || len(app.sessions) != 200 {
 		t.Fatal(w.Code, len(app.sessions))
 	}
@@ -219,5 +219,45 @@ func TestCloudLoginSlotsDoNotBlockExistingSessions(t *testing.T) {
 	w = cloudRequest(t, app, "GET", "/api/updates/profiles", cookie, "")
 	if w.Code != 200 {
 		t.Fatal(w.Code)
+	}
+}
+
+func TestCloudLandingMustNotOverwriteStrictCookieWithheldByBrowser(t *testing.T) {
+	app := cloudTest(t)
+	cookie := cloudNewBrowser(t, app)
+	client, _ := fakeAccount()
+	app.sessions[cookie.Value].app.profiles[0] = client
+	// Strict cookies can be withheld on an external top-level navigation,
+	// then present on the following same-origin profile request.
+	landing := cloudRequest(t, app, "GET", "/", nil, "")
+	if landing.Code != 200 || len(landing.Result().Cookies()) != 0 {
+		t.Fatal("landing overwrites a potentially remembered browser cookie")
+	}
+	profile := cloudRequest(t, app, "GET", "/api/updates/profiles", cookie, "")
+	if profile.Code != 200 || !strings.Contains(profile.Body.String(), `"logged":[true,false]`) {
+		t.Fatal(profile.Code, profile.Body)
+	}
+}
+
+func TestCloudBootstrapRetainsExistingProfilesAndRejectsCrossOrigin(t *testing.T) {
+	a := cloudTest(t)
+	cookie := cloudNewBrowser(t, a)
+	client, _ := fakeAccount()
+	a.sessions[cookie.Value].app.profiles[0] = client
+	w := cloudRequest(t, a, "POST", "/api/session/bootstrap", cookie, a.origin)
+	if w.Code != 200 || w.Result().Cookies()[0].Value != cookie.Value || a.sessions[cookie.Value].app.profiles[0] != client {
+		t.Fatal("bootstrap replaced an authenticated session")
+	}
+	before := len(a.sessions)
+	for _, origin := range []string{"", "https://evil.example"} {
+		if w = cloudRequest(t, a, "POST", "/api/session/bootstrap", nil, origin); w.Code != 403 {
+			t.Fatal("cross-origin bootstrap accepted")
+		}
+	}
+	if len(a.sessions) != before {
+		t.Fatal("cross-origin session allocation")
+	}
+	if w = cloudRequest(t, a, "GET", "/api/session/bootstrap", cookie, ""); w.Code != 405 {
+		t.Fatal("bootstrap accepts GET")
 	}
 }
