@@ -502,7 +502,7 @@ jobs:
                        var observedAccount: String?
                        do {
                            let client = SynergiaGatewayClient(webView: self.webView)
-          @@ -1153,7 +1165,6 @@
+          @@ -1153,5 +1165,4 @@
                            self.directGradeStatus = "Nie zapisano ocen: \(error.localizedDescription). Zapis na dysku nie został zmieniony."
                        }
                        if self.directGradeEpoch == epoch { self.directGradeBusy = false }
