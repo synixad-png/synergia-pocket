@@ -8,6 +8,7 @@ func runtimeHTMLV12() string {
 }
 
 const messagesCSSV12 = `
+.msg12-back{min-height:44px}.msg12-back-bottom{margin:14px 0 20px}.gui .msg12-tools .msg12-back{flex-basis:100%;margin-left:0}
 .msg12-tools{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px}.msg12-tools .active{background:#275a92;border-color:#68aaff}
 .msg12-card{padding:16px;border:1px solid #3c5976;border-radius:12px;background:#102137;margin:10px 0;min-width:0;overflow-wrap:anywhere}
 .msg12-card h4{font-size:17px;margin:0 0 8px}.msg12-meta{color:#bfd2e7;font-size:12px;white-space:pre-line;line-height:1.7;margin:8px 0}
@@ -34,7 +35,8 @@ const messagesJSV12 = `
    if(!response.ok)throw Error(data.error||'Operacja nie powiodła się.');return data;
  };
  function root(){const n=el('div');n.id='msg12';const body=document.getElementById('view-body');body.classList.remove('blank');body.replaceChildren(n);return n;}
- function tools(where){const bar=el('div',null,'msg12-tools');bar.append(button('Odebrane',()=>list('inbox')),button('Wysłane',()=>list('outbox')),button('Nowa wiadomość',()=>compose()));where.append(bar);}
+ function backButton(mailbox){const b=button('← Wstecz do '+(mailbox==='outbox'?'wysłanych':'odebranych'),()=>list(mailbox),'secondary msg12-back');b.dataset.messageBack=mailbox;return b;}
+ function tools(where,backTo=''){const bar=el('div',null,'msg12-tools');if(backTo)bar.append(backButton(backTo));bar.append(button('Odebrane',()=>list('inbox')),button('Wysłane',()=>list('outbox')),button('Nowa wiadomość',()=>compose()));where.append(bar);}
  function error(where,text){where.append(el('p',text,'status error'));}
  async function list(mailbox='inbox'){
    chosen=host.profile();box=mailbox;const seq=++epoch;const wrap=root();tools(wrap);
@@ -56,17 +58,17 @@ const messagesJSV12 = `
    }catch(e){if(active(seq)){waiting.remove();error(wrap,e.message);host.status(e.message,'error');}}
  }
  async function open(id,mailbox){
-   const seq=++epoch,wrap=root();tools(wrap);wrap.append(el('p','Otwieranie wiadomości…'));
+   const seq=++epoch,wrap=root();tools(wrap,mailbox);wrap.append(el('p','Otwieranie wiadomości…'));
    try{
      const data=await request('open',{box:mailbox,id},{method:'POST'});if(!active(seq))return;
-     const m=data.items;wrap.replaceChildren();tools(wrap);
+     const m=data.items;wrap.replaceChildren();tools(wrap,mailbox);
      const card=el('article',null,'msg12-card');card.append(el('h4',m.subject||'(bez tematu)'),el('p',(m.sender||'')+' · '+(m.date||''),'msg12-meta'),el('div',m.content||'','msg12-body'));
      const files=el('div',null,'msg12-files');
      for(const file of m.attachments||[]){const b=button('Pobierz: '+file.name,()=>download(m,file,b));b.dataset.messageFile=file.id;files.append(b);}
      card.append(files);
      if(mailbox==='inbox'&&!m.noReply&&/^[0-9]+$/.test(m.senderId||'')){card.append(button('Odpowiedz',()=>compose(m)));}
-     wrap.append(card);host.status('Otworzono wiadomość.','success');
-   }catch(e){if(active(seq)){wrap.replaceChildren();tools(wrap);error(wrap,e.message);host.status(e.message,'error');}}
+     wrap.append(card);const back=backButton(mailbox);back.classList.add('msg12-back-bottom');wrap.append(back);host.status('Otworzono wiadomość.','success');
+   }catch(e){if(active(seq)){wrap.replaceChildren();tools(wrap,mailbox);error(wrap,e.message);host.status(e.message,'error');}}
  }
  function filename(header){
    let m=String(header||'').match(/filename\*=UTF-8''([^;]+)/i);if(m){try{return decodeURIComponent(m[1].trim());}catch(_){}}
