@@ -615,6 +615,59 @@ jobs:
           swiftc -frontend -parse Sources/*.swift
           swiftc -parse-as-library -emit-module Sources/NativeSchoolLoginPolicy.swift -o /tmp/NativeSchoolLoginPolicy.swiftmodule
           echo 'P33 native UI and official login form bridge passed strict SHA and Swift parse checks.'
+      - name: Restore legacy connection diagnostics after P33 native login
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p=Path('Sources/MainView.swift')
+          s=p.read_text()
+          assert hashlib.sha256(s.encode()).hexdigest() == 'b1c28004f068261fc6df716021652abb06767d0ff9cca9d5616a9d014d0f2590'
+          old='''                        Button { portal.openSynergiaJournal() } label: {
+                                      Label("Otwórz dziennik (diagnostyka)", systemImage: "book")
+                                  }
+                                  if portal.webView.url != nil {'''
+          new='''                        HStack(spacing: 12) {
+                                      Button { portal.goBack() } label: {
+                                          Label("Wstecz", systemImage: "chevron.left")
+                                      }.disabled(!portal.webView.canGoBack)
+                                      Button { portal.refresh() } label: {
+                                          Label("Odśwież", systemImage: "arrow.clockwise")
+                                      }
+                                  }
+                                  Button { portal.openSynergiaJournal() } label: {
+                                      Label("Otwórz dziennik (diagnostyka)", systemImage: "book")
+                                  }
+                                  HStack(spacing: 10) {
+                                      Button("Formularz szkolny") { portal.openSchoolLoginForm() }
+                                      Button("Formularz zapasowy") { portal.openAlternativeSchoolLoginForm() }
+                                  }.font(.caption)
+                                  if portal.webView.url != nil {'''
+          assert s.count(old) == 1
+          s=s.replace(old,new)
+          old='''                        Text("Zatwierdzone adresy: \(portal.routes.pages(for: selection).count)")
+                                      .font(.caption)
+                                  Text(portal.diagnosticSummary).font(.caption2).textSelection(.enabled)'''
+          new='''                        Text("Zatwierdzone adresy: \(portal.routes.pages(for: selection).count)")
+                                      .font(.caption)
+                                  if portal.routes.route(for: selection) != nil {
+                                      Button("Usuń zapamiętany adres", role: .destructive) {
+                                          do { try portal.routes.remove(selection) }
+                                          catch { portal.alert = error.localizedDescription }
+                                      }
+                                  }
+                                  Text(portal.diagnosticSummary).font(.caption2).textSelection(.enabled)
+                                  Text(portal.status).font(.caption2).foregroundStyle(.secondary)'''
+          assert s.count(old) == 1
+          s=s.replace(old,new)
+          p.write_text(s)
+          assert hashlib.sha256(p.read_bytes()).hexdigest() == '5463722809e243bf3e91f1c6e468713c0ddc76623748a0dbcb8479f08d24018d'
+          print('P33 final advanced tools preserved, source SHA-256 PASS')
+          PY
+          swiftc -frontend -parse Sources/*.swift
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project from verified P33
