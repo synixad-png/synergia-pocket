@@ -1,0 +1,61 @@
+name: SYNERGIA DIRECT — safe real-login diagnostics
+on:
+  push:
+    branches:
+      - ci/synergia-private-login-test-20261106
+  workflow_dispatch:
+    inputs:
+      confirm_account_owner:
+        description: 'I own or am authorized to test the account'
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  public-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Extract and verify privacy-sensitive test harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'e61225cc2d2ac9b7ccaca7d8e19c717466a57915c160852ee5605f35049f4a47  ci/synergia_private_login_tests.tar.gz' | sha256sum -c -
+          tar -xzf ci/synergia_private_login_tests.tar.gz -C ci
+      - name: Check test safety without private credentials
+        run: python3 -m unittest discover -s ci -p 'test_synergia_login_smoke.py' -v
+      - name: Check official public login TLS and redirect without account
+        run: python3 ci/synergia_login_smoke.py preflight
+  private-e2e:
+    # A real login is never attempted on pushes or pull requests.
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_account_owner == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Extract and verify privacy-sensitive test harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'e61225cc2d2ac9b7ccaca7d8e19c717466a57915c160852ee5605f35049f4a47  ci/synergia_private_login_tests.tar.gz' | sha256sum -c -
+          tar -xzf ci/synergia_private_login_tests.tar.gz -C ci
+      - name: Install WebKit headless test browser
+        run: |
+          python3 -m pip install playwright==1.55.0
+          python3 -m playwright install --with-deps webkit
+      - name: Verify one LIVE login and /Me without saving personal data
+        env:
+          SYNERGIA_TEST_LOGIN: ${{ secrets.SYNERGIA_TEST_LOGIN }}
+          SYNERGIA_TEST_PASSWORD: ${{ secrets.SYNERGIA_TEST_PASSWORD }}
+        shell: bash
+        run: |
+          set +x
+          python3 ci/synergia_login_smoke.py live
