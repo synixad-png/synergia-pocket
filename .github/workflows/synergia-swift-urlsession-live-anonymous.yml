@@ -46,7 +46,16 @@ jobs:
                           let next=h.value(forHTTPHeaderField:"Location").flatMap{URL(string:$0,relativeTo:url)?.absoluteURL}
                           let cookies=session.configuration.httpCookieStorage?.cookies ?? []
                           let names=cookies.map{$0.name}.sorted().joined(separator:",")
-                          print("STEP",step,"STATUS",h.statusCode,"URL_MATCH",h.url == url,"NEXT_HOST",next?.host ?? "none","COOKIE_NAMES",names)
+                          var fields=[String:String]()
+                          for (key,value) in h.allHeaderFields {
+                              if let k=key as? String, let v=value as? String {
+                                  fields[k]=v
+                              }
+                          }
+                          let parsed=HTTPCookie.cookies(withResponseHeaderFields:fields,for:url)
+                          let parsedNames=parsed.map{$0.name}.sorted().joined(separator:",")
+                          let cookieHeaderPresent=fields.keys.contains { $0.lowercased()=="set-cookie" }
+                          print("STEP",step,"STATUS",h.statusCode,"URL_MATCH",h.url == url,"NEXT_HOST",next?.host ?? "none","COOKIE_NAMES",names,"COOKIE_STORAGE",session.configuration.httpCookieStorage != nil,"SET_COOKIE_PRESENT",cookieHeaderPresent,"PARSABLE_COOKIE_NAMES",parsedNames)
                           if step == 1 {
                               guard (300...399).contains(h.statusCode),
                                   next?.host == "api.librus.pl",next?.path.hasPrefix("/OAuth/Authorization") == true else {
