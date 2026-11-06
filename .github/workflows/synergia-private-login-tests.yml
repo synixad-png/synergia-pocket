@@ -32,8 +32,11 @@ jobs:
       - name: Check official public login TLS and redirect without account
         run: python3 ci/synergia_login_smoke.py preflight
   private-e2e:
-    # A real login is never attempted on pushes or pull requests.
-    if: github.event_name == 'workflow_dispatch' && inputs.confirm_account_owner == true
+    # Private login is never run on ordinary pushes or pull requests.
+    # A deliberately named one-time commit on this branch is required.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_account_owner == true) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/ci/synergia-private-login-test-20261106' && github.event.head_commit.message == 'RUN_AUTHORIZED_SYNERGIA_E2E_ONCE')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
