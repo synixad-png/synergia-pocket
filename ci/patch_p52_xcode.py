@@ -52,5 +52,12 @@ content_end = src.index('                }\n                .padding(16)\n      
 src = src[:content_start] + '                    readerContents\n' + src[content_end:]
 for part in ('private func attachmentContents(', 'private func messageContent(', 'private var readerContents:'):
     assert src.count(part) == 1, part
+text_size_decl = '    @State private var textSize: DirectMessageReaderTextSize = .normal\n'
+assert src.count(text_size_decl) == 1
+src = src.replace(text_size_decl,
+    text_size_decl + '    @ScaledMetric(relativeTo: .body) private var bodyTextScale: CGFloat = 1\n', 1)
+old_font = '.font(.system(size: textSize.pointSize, relativeTo: .body))'
+assert src.count(old_font) == 1
+src = src.replace(old_font, '.font(.system(size: textSize.pointSize * bodyTextScale))', 1)
 path.write_text(src, encoding='utf-8')
 print('P53 SwiftUI compile repairs applied to original P52 source')
