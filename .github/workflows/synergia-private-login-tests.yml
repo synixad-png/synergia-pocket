@@ -120,3 +120,53 @@ jobs:
                       context.close()
               browser.close()
           PY
+
+      - name: Follow visible Synergia menu to actual school login (anonymous)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from playwright.sync_api import sync_playwright
+          from urllib.parse import urlsplit
+          def safeurl(url):
+              x=urlsplit(url)
+              return f"{x.hostname}{x.path}"
+          with sync_playwright() as p:
+              b=p.webkit.launch(headless=True)
+              page=b.new_page(locale="pl-PL",viewport={"width":1320,"height":820})
+              page.goto("https://portal.librus.pl/rodzina",wait_until="domcontentloaded",timeout=30000)
+              page.wait_for_timeout(4500)
+              print("START",safeurl(page.url))
+              matches=[]
+              for el in page.locator('button,a,[role="button"]').all():
+                  try:
+                      s=" ".join(el.inner_text(timeout=150).strip().split())[:80]
+                      if ("synergia" in s.lower() or "zaloguj" in s.lower()) and s:
+                          matches.append((s,el.get_attribute("href") or "",el.is_visible(timeout=150)))
+                  except Exception:
+                      pass
+              print("MENU_ITEMS",len(matches))
+              for name,href,visible in matches[:18]:
+                  print("ITEM",repr(name),"href",safeurl(href) if href.startswith("https://") else "<relative-or-none>","visible",visible)
+              for label in ("LIBRUS Synergia","Synergia"):
+                  try:
+                      v=page.get_by_text(label,exact=True).filter(visible=True)
+                      if v.count():
+                          v.first.click(timeout=2500)
+                          page.wait_for_timeout(1500)
+                          print("OPEN_MENU",label,"url",safeurl(page.url))
+                          break
+                  except Exception as e:
+                      print("OPEN_MENU_FAILED",label,type(e).__name__)
+              for label in ("Zaloguj","Zaloguj się"):
+                  try:
+                      v=page.get_by_text(label,exact=True)
+                      if v.count():
+                          v.first.click(timeout=2500)
+                          page.wait_for_timeout(2500)
+                          print("CLICK_LOGIN",label,"url",safeurl(page.url),"password_fields",page.locator('input[type="password"]').count())
+                          break
+                  except Exception as e:
+                      print("CLICK_LOGIN_FAILED",label,type(e).__name__)
+              print("FINAL",safeurl(page.url),"password_fields",page.locator('input[type="password"]').count())
+              b.close()
+          PY
