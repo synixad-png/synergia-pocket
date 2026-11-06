@@ -223,6 +223,14 @@ jobs:
                           print("LOGIN_CLICK_ERROR",type(ex).__name__)
                   else:
                       print("MENU_NO_SCHOOL_LOGIN")
+              school_link=page.locator('a[href="/rodzina/synergia/loguj"]')
+              if school_link.count():
+                  try:
+                      school_link.first.evaluate("(e)=>e.click()")
+                      page.wait_for_timeout(3500)
+                      print("CLICK_SCHOOL_LINK",safe(page.url),"password_fields",page.locator('input[type="password"]').count())
+                  except Exception as ex:
+                      print("SCHOOL_LINK_CLICK_ERROR",type(ex).__name__)
               print("END",safe(page.url),"password_fields",page.locator('input[type="password"]').count())
               browser.close()
           PY
