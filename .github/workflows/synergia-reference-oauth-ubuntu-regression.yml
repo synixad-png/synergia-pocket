@@ -90,6 +90,15 @@ jobs:
           cd synergia-direct-ios
           echo 'c7763b3d1188ec035af9c0a10661f914485ec776dcc25dfa37745d0ce564936b  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
           bash Tests/run_reference_oauth.sh
+      - name: Apply production cookie-jar fix and run native Swift standalone tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'b828ec032496df737c854035c5caa1e3e2353cc966f220208bcd3326b9566ed9  ci/cookiejar_reference_oauth.patch.gz' | sha256sum -c -
+          gzip -cd ci/cookiejar_reference_oauth.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          echo 'fd2f4011b58cdf0cb6ea877c43970a0a76b1e4ecd488bc6b15d54d00bb6449fd  Sources/DirectOAuthLoginClient.swift' | sha256sum -c -
+          bash Tests/run_cookie_policy_from_production.sh
       - name: Confirm runner and verify all reference OAuth tests on Linux
         shell: bash
         run: |
