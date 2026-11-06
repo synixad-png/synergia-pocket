@@ -1,4 +1,4 @@
-name: Synergia Direct — v0.31 P33 native login unsigned IPA (Intel)
+name: Synergia Direct — v0.31 P34 school login failover unsigned IPA (Intel)
 on:
   push:
     branches:
@@ -668,9 +668,32 @@ jobs:
           print('P33 final advanced tools preserved, source SHA-256 PASS')
           PY
           swiftc -frontend -parse Sources/*.swift
+      - name: Apply verified P34 school login failover and diagnostics
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, base64, lzma
+          s = Path('../ci/SYNERGIA_P33_TO_P34.patch.xz.b64').read_text().strip()
+          patch = lzma.decompress(base64.b64decode(s))
+          assert hashlib.sha256(patch).hexdigest() == '10d691c3dc6a4e71283ff4811310e50b3d24299ead4112b4117a112ccb256b1a'
+          Path('/tmp/SYNERGIA_P33_TO_P34.patch').write_bytes(patch)
+          print('P34 patch SHA-256 verified')
+          PY
+          git apply --check /tmp/SYNERGIA_P33_TO_P34.patch
+          git apply /tmp/SYNERGIA_P33_TO_P34.patch
+          shasum -a 256 -c <<'P34_SHA'
+          45bafcdda92108a8bf566033befe1313c1c888370fe979d7fc677f7157fc2f6b  Sources/NativeSchoolLoginPolicy.swift
+          93b3255dae7241b5810e5f364b5bc4e7c0f8e1baa795eecc96cda0a19c04e737  Sources/Portal.swift
+          09621c88d39599c5bc3a4cb526041d049958745a69ba728c21886e4bf05df253  Sources/MainView.swift
+          P34_SHA
+          swiftc -frontend -parse Sources/*.swift
+          swiftc -parse-as-library -emit-module Sources/NativeSchoolLoginPolicy.swift -o /tmp/P34NativeSchoolLoginPolicy.swiftmodule
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Generate Xcode project from verified P33
+      - name: Generate Xcode project from verified P34
         working-directory: synergia-direct-ios
         run: xcodegen generate
       - name: Build unsigned iPhone IPA application
@@ -679,20 +702,20 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-      - name: Package unsigned P33 IPA
+      - name: Package unsigned P34 IPA
         working-directory: synergia-direct-ios
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
-          zip -qr SYNERGIA_DIRECT_v031_P33_UNSIGNED.ipa Payload
-          unzip -tq SYNERGIA_DIRECT_v031_P33_UNSIGNED.ipa
-          shasum -a 256 SYNERGIA_DIRECT_v031_P33_UNSIGNED.ipa
-      - name: Upload P33 IPA
+          zip -qr SYNERGIA_DIRECT_v031_P34_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v031_P34_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v031_P34_UNSIGNED.ipa
+      - name: Upload P34 IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SYNERGIA_DIRECT_v031_P33_UNSIGNED_IPA
-          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P33_UNSIGNED.ipa
+          name: SYNERGIA_DIRECT_v031_P34_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v031_P34_UNSIGNED.ipa
           if-no-files-found: error
           retention-days: 14
