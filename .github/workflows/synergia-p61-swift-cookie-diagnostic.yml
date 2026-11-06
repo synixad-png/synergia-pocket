@@ -1,0 +1,67 @@
+name: P61 — macOS Foundation OAuth cookie and redirect probe
+on:
+  push:
+    branches:
+      - ci/synergia-direct-p61-http302-diagnostic-20261106
+permissions:
+  contents: read
+jobs:
+  swift-redirect-probe:
+    runs-on: macos-15-intel
+    timeout-minutes: 12
+    steps:
+      - name: Swift URLSession real anonymous OAuth chain (no credentials)
+        shell: bash
+        run: |
+          cat > /tmp/SynergiaOAuthProbe.swift <<'SWIFT'
+          import Foundation
+          final class NoRedirects: NSObject, URLSessionTaskDelegate {
+              func urlSession(_ session: URLSession, task: URLSessionTask,
+                              willPerformHTTPRedirection response: HTTPURLResponse,
+                              newRequest request: URLRequest,
+                              completionHandler: @escaping (URLRequest?) -> Void) {
+                  completionHandler(nil)
+              }
+          }
+          @main struct OAuthProbe {
+              static func main() async {
+                  let config=URLSessionConfiguration.ephemeral
+                  config.httpShouldSetCookies=true
+                  config.httpCookieAcceptPolicy = .always
+                  config.requestCachePolicy = .reloadIgnoringLocalCacheData
+                  config.timeoutIntervalForRequest=20
+                  let delegate=NoRedirects()
+                  let session=URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+                  defer { session.invalidateAndCancel() }
+                  var url=URL(string:"https://synergia.librus.pl/loguj/portalRodzina")!
+                  for step in 1...8 {
+                      let host=url.host ?? ""
+                      guard url.scheme=="https", ["synergia.librus.pl","api.librus.pl"].contains(host),
+                            url.user == nil, url.password == nil, url.port == nil else {
+                          print("STEP \(step) STOP unsafe-host"); return
+                      }
+                      var req=URLRequest(url:url)
+                      req.httpShouldHandleCookies=true
+                      req.setValue("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36", forHTTPHeaderField:"User-Agent")
+                      do {
+                          let (_,res)=try await session.data(for:req)
+                          guard let http=res as? HTTPURLResponse else {
+                              print("STEP \(step) ERROR non-http"); return
+                          }
+                          let nextStr=http.value(forHTTPHeaderField:"Location")
+                          let next=nextStr.flatMap{URL(string:$0,relativeTo:url)?.absoluteURL}
+                          let jar=session.configuration.httpCookieStorage?.cookies ?? []
+                          let cookies=jar.map{$0.name}.sorted().joined(separator:",")
+                          print("STEP \(step) HTTP \(http.statusCode) req_host \(host) req_path \(url.path) response_host \(http.url?.host ?? "none") url_equal \(http.url==url) next_host \(next?.host ?? "none") next_path \(next?.path ?? "none") cookies \(cookies)")
+                          if (300...399).contains(http.statusCode), let next {url=next} else {break}
+                      } catch {
+                          let e=error as NSError
+                          print("STEP \(step) ERROR \(e.domain) code \(e.code)")
+                          return
+                      }
+                  }
+              }
+          }
+          SWIFT
+          swiftc -parse-as-library /tmp/SynergiaOAuthProbe.swift -o /tmp/SynergiaOAuthProbe
+          /tmp/SynergiaOAuthProbe
