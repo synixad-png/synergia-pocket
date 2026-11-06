@@ -1,0 +1,27 @@
+name: SYNERGIA public login TLS diagnostics (no credentials)
+on:
+  push:
+    branches:
+      - ci/synergia-login-tls-diag-20261106
+permissions:
+  contents: read
+jobs:
+  tls-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Compare TLS and redirects for official public login entrypoints
+        shell: bash
+        run: |
+          set -u
+          for url in \
+            https://synergia.librus.pl/loguj/portalRodzina \
+            https://www.librus.com.pl/ \
+            https://portal.librus.pl/rodzina/synergia/loguj \
+            https://portal.librus.pl/rodzina \
+            https://konto.librus.pl/ ; do
+            echo "============== $url =============="
+            curl --head --location --silent --show-error --max-time 20 \
+              --output /dev/null --write-out 'HTTP=%{http_code} SSL_VERIFY=%{ssl_verify_result} final=%{url_effective} ip=%{remote_ip} content_type=%{content_type}\n' \
+              "$url" || echo "CURL_FAILED=$?"
+          done
