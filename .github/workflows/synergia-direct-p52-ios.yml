@@ -1,4 +1,4 @@
-name: SYNERGIA DIRECT v0.31 P52 — unsigned IPA
+name: SYNERGIA DIRECT v0.31 P53 — unsigned IPA
 on:
   push:
     branches:
@@ -22,6 +22,8 @@ jobs:
           test -f synergia-direct-ios/project.yml
           test -f synergia-direct-ios/Sources/SynergiaDirectApp.swift
           test "$(find synergia-direct-ios/Sources -maxdepth 1 -type f -name '*.swift' | wc -l | tr -d ' ')" -eq 107
+      - name: Apply verified SwiftUI compile fixes (P53)
+        run: python3 ci/patch_p52_xcode.py synergia-direct-ios/Sources/MainView.swift
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Build iOS device app without signing
@@ -39,14 +41,14 @@ jobs:
           test -d build/Build/Products/Release-iphoneos/SynergiaDirect.app
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
-          zip -qry SYNERGIA_DIRECT_v0_31_P52_UNSIGNED.ipa Payload
-          unzip -tq SYNERGIA_DIRECT_v0_31_P52_UNSIGNED.ipa
-          shasum -a 256 SYNERGIA_DIRECT_v0_31_P52_UNSIGNED.ipa
+          zip -qry SYNERGIA_DIRECT_v0_31_P53_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v0_31_P53_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v0_31_P53_UNSIGNED.ipa
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SYNERGIA_DIRECT_v0_31_P52_UNSIGNED_IPA
-          path: synergia-direct-ios/SYNERGIA_DIRECT_v0_31_P52_UNSIGNED.ipa
+          name: SYNERGIA_DIRECT_v0_31_P53_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v0_31_P53_UNSIGNED.ipa
           retention-days: 14
           if-no-files-found: error
       - name: Upload Xcode build log on failure
