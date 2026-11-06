@@ -1,6 +1,0 @@
-fastapi>=0.115,<1
-uvicorn>=0.30,<1
-librus-synergia>=0.3.30,<1
-redis>=5,<7
-cryptography>=47,<49
-pywebpush>=2.5,<3
