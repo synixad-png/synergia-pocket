@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo 'db07c33e75013bd1d9a16bf2fcf0c5fcb72a2ca97b1c6cfc76641c69fd8e16c4  ci/p60_native_oauth_source.patch.gz' | shasum -a 256 -c -
+          echo '5c85cecc6e9edfa1b8e132e0229ba0360e6f5730664ad4f022fc99b70878fd0d  ci/p60_native_oauth_source.patch.gz' | shasum -a 256 -c -
           gzip -cd ci/p60_native_oauth_source.patch.gz | patch -p1 -d synergia-direct-ios
           cd synergia-direct-ios
           echo 'b880bcbd78b2113043b938c8114c01519bd4302711cbc78b0d4cff0cc0dd77df  Sources/Portal.swift' | shasum -a 256 -c -
