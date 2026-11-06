@@ -1,0 +1,69 @@
+name: SYNERGIA DIRECT — Swift URLSession anonymous OAuth bootstrap check
+on:
+  push:
+    branches:
+      - ci/synergia-oauth-linux-verification-20261106
+permissions:
+  contents: read
+jobs:
+  check-foundation-networking:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Verify Swift URLSession 302 cookie preservation against Librus (no login)
+        shell: bash
+        run: |
+          cat > /tmp/LibrusBootstrap.swift <<'SWIFT'
+          import Foundation
+          #if canImport(FoundationNetworking)
+          import FoundationNetworking
+          #endif
+          final class NoRedirects: NSObject, URLSessionTaskDelegate {
+              func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                              newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+                  completionHandler(nil)
+              }
+          }
+          @main struct Bootstrap {
+              static func main() async {
+                  let config = URLSessionConfiguration.ephemeral
+                  config.httpShouldSetCookies = true
+                  config.httpCookieAcceptPolicy = .always
+                  let delegate=NoRedirects()
+                  let session=URLSession(configuration:config,delegate:delegate,delegateQueue:nil)
+                  defer { session.invalidateAndCancel() }
+                  var url=URL(string:"https://synergia.librus.pl/loguj/portalRodzina")!
+                  for step in 1...2 {
+                      guard url.scheme == "https",["synergia.librus.pl","api.librus.pl"].contains(url.host ?? "") else {
+                          print("STOP_UNSAFE_HOST");return
+                      }
+                      var req=URLRequest(url:url)
+                      req.timeoutInterval=20
+                      req.httpShouldHandleCookies=true
+                      do {
+                          let (_,response)=try await session.data(for:req)
+                          guard let h=response as? HTTPURLResponse else { print("NO_HTTP_RESPONSE");return }
+                          let next=h.value(forHTTPHeaderField:"Location").flatMap{URL(string:$0,relativeTo:url)?.absoluteURL}
+                          let cookies=session.configuration.httpCookieStorage?.cookies ?? []
+                          let names=cookies.map{$0.name}.sorted().joined(separator:",")
+                          print("STEP",step,"STATUS",h.statusCode,"URL_MATCH",h.url == url,"NEXT_HOST",next?.host ?? "none","COOKIE_NAMES",names)
+                          if step == 1 {
+                              guard (300...399).contains(h.statusCode),
+                                  next?.host == "api.librus.pl",next?.path.hasPrefix("/OAuth/Authorization") == true else {
+                                  print("OAUTH_ENTRY_NOT_AS_EXPECTED"); return
+                              }
+                              url=next!
+                          } else {
+                              print("BOOTSTRAP_STATUS",h.statusCode,"EXPECTED_COOKIE_NAMES_PRESENT",names.contains("DZIENNIKSID"))
+                          }
+                      } catch {
+                          let e=error as NSError
+                          print("NETWORK_ERROR",e.domain,e.code)
+                          return
+                      }
+                  }
+              }
+          }
+          SWIFT
+          swiftc -parse-as-library /tmp/LibrusBootstrap.swift -o /tmp/LibrusBootstrap
+          /tmp/LibrusBootstrap
