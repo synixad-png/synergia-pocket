@@ -25,3 +25,33 @@ jobs:
               --output /dev/null --write-out 'HTTP=%{http_code} SSL_VERIFY=%{ssl_verify_result} final=%{url_effective} ip=%{remote_ip} content_type=%{content_type}\n' \
               "$url" || echo "CURL_FAILED=$?"
           done
+      - name: Inspect public login forms and embedded frames without credentials
+        shell: bash
+        run: |
+          set -u
+          cat > /tmp/inspect.py <<'PY'
+          from html.parser import HTMLParser
+          from urllib.parse import urlsplit, urljoin
+          import subprocess
+          class P(HTMLParser):
+              def __init__(self,base): super().__init__();self.base=base;self.forms=[];self.inputs=[];self.frames=[];self.scripts=[]
+              def handle_starttag(self,tag,attrs):
+                  a=dict(attrs)
+                  if tag=='form':self.forms.append({'action':urljoin(self.base,a.get('action','')),'method':a.get('method')})
+                  elif tag=='iframe':self.frames.append(urljoin(self.base,a.get('src','')))
+                  elif tag=='input':self.inputs.append({'type':a.get('type'),'name':a.get('name')})
+                  elif tag=='script' and a.get('src'):self.scripts.append(urljoin(self.base,a.get('src','')))
+          urls=['https://synergia.librus.pl/loguj/portalRodzina','https://portal.librus.pl/rodzina/synergia/loguj','https://portal.librus.pl/rodzina','https://konto.librus.pl/']
+          for url in urls:
+              print('---',url)
+              cp=subprocess.run(['curl','--location','--silent','--show-error','--max-time','22','--max-filesize','400000','--write-out','\\n__URL__=%{url_effective}\\n__HTTP__=%{http_code}\\n','--output','/tmp/response',url],capture_output=True,text=True)
+              eff=url
+              for l in cp.stdout.splitlines():
+                  if l.startswith('__URL__='):eff=l[8:]
+                  if l.startswith('__HTTP__='):print('HTTP',l[9:])
+              print('effective_host',urlsplit(eff).hostname,'effective_path',urlsplit(eff).path,'exit',cp.returncode)
+              if cp.returncode:continue
+              p=P(eff);p.feed(open('/tmp/response',errors='replace').read())
+              print('forms',p.forms[:4]);print('inputs',p.inputs[:14]);print('iframes',p.frames[:7]);print('external_scripts_count',len(p.scripts))
+          PY
+          python3 /tmp/inspect.py
