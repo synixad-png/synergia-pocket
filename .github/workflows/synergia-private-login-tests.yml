@@ -170,3 +170,59 @@ jobs:
               print("FINAL",safeurl(page.url),"password_fields",page.locator('input[type="password"]').count())
               b.close()
           PY
+
+      - name: Inspect dynamic Synergia dropdown navigation without private account
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from playwright.sync_api import sync_playwright
+          from urllib.parse import urlsplit
+          def safe(s):
+              u=urlsplit(s)
+              return (u.hostname or '<none>')+(u.path or '/')
+          with sync_playwright() as p:
+              browser=p.webkit.launch(headless=True)
+              ctx=browser.new_context(locale="pl-PL",viewport={"width":1320,"height":820})
+              page=ctx.new_page()
+              page.goto("https://portal.librus.pl/rodzina",wait_until="domcontentloaded",timeout=25000)
+              page.wait_for_timeout(2300)
+              entries=page.locator("button,a,[role='button']")
+              selected=None
+              for el in entries.all():
+                  try:
+                      t=" ".join(el.inner_text(timeout=150).split())
+                      if t.lower()=="librus synergia":
+                          selected=el;break
+                  except Exception:pass
+              if selected is None:
+                  print("SYNERGIA_CONTROL missing")
+              else:
+                  print("SYNERGIA_CONTROL tag",selected.evaluate("(e)=>e.tagName"),"href",selected.get_attribute("href") or "<none>")
+                  try:
+                      selected.evaluate("(e)=>e.click()")
+                      page.wait_for_timeout(1400)
+                      print("AFTER_OPEN_MENU",safe(page.url))
+                  except Exception as ex:
+                      print("OPEN_MENU_ERROR",type(ex).__name__)
+                  visible=[]
+                  for el in page.locator("a,button,[role='menuitem']").all():
+                      try:
+                          label=" ".join(el.inner_text(timeout=120).split())[:60]
+                          if "zaloguj" in label.lower() or "synergia" in label.lower():
+                              visible.append((label,el.get_attribute("href") or "<none>",el.is_visible(timeout=100),el))
+                      except Exception:pass
+                  for label,href,vis,el in visible[:15]:
+                      print("AFTER_MENU_ITEM",repr(label),"visible",vis,"href",safe(href) if href.startswith("https://") else href[:80])
+                  logins=[(lab,el) for lab,href,vis,el in visible if lab.casefold()=="zaloguj" and vis]
+                  if logins:
+                      try:
+                          logins[0][1].evaluate("(e)=>e.click()")
+                          page.wait_for_timeout(4000)
+                          print("SCHOOL_LOGIN_AFTER_MENU",safe(page.url),"password_fields",page.locator('input[type="password"]').count())
+                      except Exception as ex:
+                          print("LOGIN_CLICK_ERROR",type(ex).__name__)
+                  else:
+                      print("MENU_NO_SCHOOL_LOGIN")
+              print("END",safe(page.url),"password_fields",page.locator('input[type="password"]').count())
+              browser.close()
+          PY
