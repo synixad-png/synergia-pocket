@@ -41,7 +41,7 @@ jobs:
               status=rsp.getcode()
               loc=rsp.headers.get('Location')
               nexturl,nextparsed=dest(loc,url) if loc else ('',None)
-              print('STAGE',step,'status',status,'host',p.hostname,'path',p.path,'next_host',nextparsed.hostname if nextparsed else '<none>','next_path',nextparsed.path if nextparsed else '<none>','next_client46',bool(nextparsed and '46' in urllib.parse.parse_qs(nextparsed.query).get('client_id',[])),'cookie_names',sorted({c.name for c in jar}))
+              print('STAGE',step,'status',status,'host',p.hostname,'path',p.path,'next_host',nextparsed.hostname if nextparsed else '<none>','next_path',nextparsed.path if nextparsed else '<none>','next_client46',bool(nextparsed and '46' in urllib.parse.parse_qs(nextparsed.query).get('client_id',[])),'same_url',bool(loc and nexturl==url),'cookie_names',sorted({c.name for c in jar}))
               rsp.close()
               if not loc:
                   print('STOP no-location')
