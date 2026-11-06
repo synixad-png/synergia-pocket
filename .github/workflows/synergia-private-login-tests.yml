@@ -62,3 +62,61 @@ jobs:
         run: |
           set +x
           python3 ci/synergia_login_smoke.py live
+
+  anonymous-webkit-flow:
+    # Browser-based form-route checks only. No credentials, screenshots or profile data.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install browser engine
+        run: |
+          python3 -m pip install playwright==1.55.0
+          python3 -m playwright install --with-deps webkit
+      - name: Trace official login entry and presence of password form (anonymous)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from urllib.parse import urlsplit
+          from playwright.sync_api import sync_playwright
+          targets=[
+            ("school-entry","https://synergia.librus.pl/loguj/portalRodzina"),
+            ("portal-school-entry","https://portal.librus.pl/rodzina/synergia/loguj"),
+            ("portal-landing","https://portal.librus.pl/rodzina"),
+            ("legacy-login","https://www.librus.com.pl/"),
+          ]
+          def hostpath(url):
+              s=urlsplit(url)
+              return (s.hostname or "<no-host>")+(s.path or "/")
+          with sync_playwright() as playwright:
+              browser=playwright.webkit.launch(headless=True)
+              for label,url in targets:
+                  context=browser.new_context(locale="pl-PL")
+                  page=context.new_page()
+                  try:
+                      resp=page.goto(url,wait_until="domcontentloaded",timeout=30000)
+                      page.wait_for_timeout(1800)
+                      print("CHECK",label,"status",resp.status if resp else "none",
+                            "url",hostpath(page.url),
+                            "password_fields",page.locator('input[type="password"]').count(),
+                            "forms",page.locator("form").count())
+                      if label=="portal-landing":
+                          print("PORTAL_LINKS")
+                          for link in page.locator("a[href]").all()[:180]:
+                              try:
+                                  name=" ".join(link.inner_text(timeout=250).split())[:70]
+                                  href=link.get_attribute("href") or ""
+                                  if "synergia" in name.lower() or "zaloguj" in name.lower() or "synergia" in href.lower() or "loguj" in href.lower():
+                                      print("LINK",repr(name),hostpath(page.url if href.startswith("#") else href if href.startswith("https://") else page.url))
+                              except Exception:
+                                  pass
+                  except Exception as exc:
+                      print("CHECK",label,"ERROR",type(exc).__name__)
+                  finally:
+                      context.close()
+              browser.close()
+          PY
