@@ -1,0 +1,50 @@
+name: P61 — anonymous OAuth redirect diagnosis
+on:
+  push:
+    branches:
+      - ci/synergia-direct-p61-http302-diagnostic-20261106
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect OAuth initial authorization redirects without credentials
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request, urllib.error, http.cookiejar, urllib.parse, ssl
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl):
+                  return None
+          jar=http.cookiejar.CookieJar()
+          opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect(),urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+          def dest(loc,source):
+              absolute=urllib.parse.urljoin(source,loc)
+              p=urllib.parse.urlparse(absolute)
+              return absolute,p
+          url='https://synergia.librus.pl/loguj/portalRodzina'
+          for step in range(1,9):
+              p=urllib.parse.urlparse(url)
+              if p.scheme!='https' or p.hostname not in ('api.librus.pl','synergia.librus.pl','portal.librus.pl') or p.username or p.password or p.port:
+                  print('STOP unsafe-next-hop',step,p.hostname)
+                  break
+              try:
+                  rsp=opener.open(urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'}),timeout=15)
+              except urllib.error.HTTPError as e:
+                  rsp=e
+              except Exception as e:
+                  print('STAGE',step,'ERROR',type(e).__name__)
+                  break
+              status=rsp.getcode()
+              loc=rsp.headers.get('Location')
+              nexturl,nextparsed=dest(loc,url) if loc else ('',None)
+              print('STAGE',step,'status',status,'host',p.hostname,'path',p.path,'next_host',nextparsed.hostname if nextparsed else '<none>','next_path',nextparsed.path if nextparsed else '<none>','cookie_names',sorted({c.name for c in jar}))
+              rsp.close()
+              if not loc:
+                  print('STOP no-location')
+                  break
+              url=nexturl
+          PY
