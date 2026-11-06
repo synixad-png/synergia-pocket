@@ -39,7 +39,10 @@ jobs:
                       }
                       var req=URLRequest(url:url)
                       req.timeoutInterval=20
-                      req.httpShouldHandleCookies=true
+                      req.httpShouldHandleCookies=false
+                      if let jar=config.httpCookieStorage, let cookies=jar.cookies(for:url), !cookies.isEmpty {
+                          req.setValue(HTTPCookie.requestHeaderFields(with:cookies)["Cookie"],forHTTPHeaderField:"Cookie")
+                      }
                       do {
                           let (_,response)=try await session.data(for:req)
                           guard let h=response as? HTTPURLResponse else { print("NO_HTTP_RESPONSE");return }
@@ -55,7 +58,12 @@ jobs:
                           let parsed=HTTPCookie.cookies(withResponseHeaderFields:fields,for:url)
                           let parsedNames=parsed.map{$0.name}.sorted().joined(separator:",")
                           let cookieHeaderPresent=fields.keys.contains { $0.lowercased()=="set-cookie" }
-                          print("STEP",step,"STATUS",h.statusCode,"URL_MATCH",h.url == url,"NEXT_HOST",next?.host ?? "none","COOKIE_NAMES",names,"COOKIE_STORAGE",session.configuration.httpCookieStorage != nil,"SET_COOKIE_PRESENT",cookieHeaderPresent,"PARSABLE_COOKIE_NAMES",parsedNames)
+                          let before=config.httpCookieStorage?.cookies?.count ?? -1
+                          for cookie in parsed {config.httpCookieStorage?.setCookie(cookie)}
+                          let after=config.httpCookieStorage?.cookies?.count ?? -1
+                          print("STEP",step,"STATUS",h.statusCode,"URL_MATCH",h.url == url,"NEXT_HOST",next?.host ?? "none","COOKIE_NAMES",names,"COOKIE_STORAGE",session.configuration.httpCookieStorage != nil,"SET_COOKIE_PRESENT",cookieHeaderPresent,"PARSABLE_COOKIE_NAMES",parsedNames,"STORAGE_BEFORE",before,"STORAGE_AFTER_MANUAL",after)
+                          let attributes=parsed.map{"\($0.name)@\($0.domain):\($0.path):secure=\($0.isSecure)"}.sorted().joined(separator:",")
+                          print("PUBLIC_COOKIE_ATTRIBUTES",attributes)
                           if step == 1 {
                               guard (300...399).contains(h.statusCode),
                                   next?.host == "api.librus.pl",next?.path.hasPrefix("/OAuth/Authorization") == true else {
