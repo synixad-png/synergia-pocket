@@ -1,0 +1,63 @@
+name: SYNERGIA DIRECT v0.31 P54 — unsigned IPA
+on:
+  push:
+    branches:
+      - ci/synergia-direct-p54-ipa-20261106
+permissions:
+  contents: read
+jobs:
+  ios-build:
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify original P52 Swift source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '6c92bc209c23f092d2e8bd930af1cec3ecbdb1bc23299525da99d7c9b041247b  ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip' | shasum -a 256 -c -
+          unzip -tq ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip
+          mkdir -p synergia-direct-ios
+          unzip -q ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip -d synergia-direct-ios
+          test -f synergia-direct-ios/project.yml
+          test -f synergia-direct-ios/Sources/SynergiaDirectApp.swift
+          test "$(find synergia-direct-ios/Sources -maxdepth 1 -type f -name '*.swift' | wc -l | tr -d ' ')" -eq 107
+      - name: Apply verified SwiftUI compile fixes (P53)
+        run: python3 ci/patch_p52_xcode.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply native iPhone/iPad adaptive navigation changes (P54)
+        run: python3 ci/patch_p54_navigation.py synergia-direct-ios/Sources/MainView.swift
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build iOS device app without signing
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee xcodebuild.log
+      - name: Pack and test unsigned IPA
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d build/Build/Products/Release-iphoneos/SynergiaDirect.app
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
+          zip -qry SYNERGIA_DIRECT_v0_31_P54_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v0_31_P54_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v0_31_P54_UNSIGNED.ipa
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SYNERGIA_DIRECT_v0_31_P54_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v0_31_P54_UNSIGNED.ipa
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload Xcode build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SYNERGIA_DIRECT_P52_XCODE_LOG
+          path: synergia-direct-ios/xcodebuild.log
+          retention-days: 14
+          if-no-files-found: ignore
