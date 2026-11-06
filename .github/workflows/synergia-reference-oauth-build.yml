@@ -90,6 +90,15 @@ jobs:
           cd synergia-direct-ios
           echo 'c7763b3d1188ec035af9c0a10661f914485ec776dcc25dfa37745d0ce564936b  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
           bash Tests/run_reference_oauth.sh
+      - name: Apply explicit secure cookie-jar fix and real Swift tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'b828ec032496df737c854035c5caa1e3e2353cc966f220208bcd3326b9566ed9  ci/cookiejar_reference_oauth.patch.gz' | shasum -a 256 -c -
+          gzip -cd ci/cookiejar_reference_oauth.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          echo 'fd2f4011b58cdf0cb6ea877c43970a0a76b1e4ecd488bc6b15d54d00bb6449fd  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
+          bash Tests/run_cookie_policy_from_production.sh
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Build iOS device app without signing
@@ -107,7 +116,7 @@ jobs:
           test -d build/Build/Products/Release-iphoneos/SynergiaDirect.app
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
-          zip -qry SYNERGIA_DIRECT_v0_31_REFERENCE_OAUTH_UNSIGNED.ipa Payload
+          zip -qry SYNERGIA_DIRECT_v0_31_COOKIE_JAR_CANDIDATE_UNSIGNED.ipa Payload
           unzip -tq SYNERGIA_DIRECT_v0_31_REFERENCE_OAUTH_UNSIGNED.ipa
           shasum -a 256 SYNERGIA_DIRECT_v0_31_REFERENCE_OAUTH_UNSIGNED.ipa
       - name: Upload IPA
