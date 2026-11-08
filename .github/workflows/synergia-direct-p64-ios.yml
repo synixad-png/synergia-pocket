@@ -1,0 +1,134 @@
+name: SYNERGIA DIRECT P64 — iPhone/iPad unsigned IPA
+on:
+  push:
+    branches:
+      - ci/synergia-direct-p64-ipa-20261108
+permissions:
+  contents: read
+jobs:
+  ios-build:
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify original P52 Swift source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '6c92bc209c23f092d2e8bd930af1cec3ecbdb1bc23299525da99d7c9b041247b  ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip' | shasum -a 256 -c -
+          unzip -tq ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip
+          mkdir -p synergia-direct-ios
+          unzip -q ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip -d synergia-direct-ios
+          test -f synergia-direct-ios/project.yml
+          test -f synergia-direct-ios/Sources/SynergiaDirectApp.swift
+          test "$(find synergia-direct-ios/Sources -maxdepth 1 -type f -name '*.swift' | wc -l | tr -d ' ')" -eq 107
+      - name: Apply verified SwiftUI compile fixes (P53)
+        run: python3 ci/patch_p52_xcode.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply native iPhone/iPad adaptive navigation changes (P54)
+        run: python3 ci/patch_p54_navigation.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply iPad detail path identity fix (P55)
+        run: python3 ci/patch_p55_detail_navigation.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply explicit in-app account switch UI (P56)
+        run: python3 ci/patch_p56_account_switch.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply account privacy and login guard (P57)
+        run: python3 ci/patch_p57_account_privacy.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply P58 live official in-app login and secure TLS diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          gzip -cd ci/p58_official_login.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          printf '%b\n' 'ecf1e6c27aede6cad4abe27928fd9be9d0403dfa1f7f66bc9ede6d1f21702080  Sources/MainView.swift\n9859ccf0246907e11e93a73d43515320459b3dabe973ee8ada0b948d4d4f44eb  Sources/Portal.swift\n0a20353ed5c0730edb02fa7ef2856346367f85b0269d6f53080b472b39987e3e  Sources/NativeSchoolLoginPolicy.swift\nae44e824b5761bcba583ba4429d6318bd3338eac1472a67fb96fc98616433b08  Sources/DirectSynergiaEntry.swift' | shasum -a 256 -c -
+      - name: Apply P59 direct school login and public landing guidance
+        shell: bash
+        run: |
+          set -euo pipefail
+          gzip -cd ci/p59_login_direct.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          echo 'd24e2edb7a2c9865fb3dd7e1cd56a9f8b2fac6fb9634e9250a3c6d33bb80d623  Sources/Portal.swift' | shasum -a 256 -c -
+          echo 'bb2b79020ed70648d4d1b4457c09d7d0573feb51a078a6ddc3333809a5243a21  Sources/MainView.swift' | shasum -a 256 -c -
+          echo '6a6701aa1cfd40c9235df387e6e1c002b8db8050e413fa41e388bbc0990ac863  Sources/DirectSynergiaEntry.swift' | shasum -a 256 -c -
+      - name: Apply and verify native OAuth P60 source delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '5c85cecc6e9edfa1b8e132e0229ba0360e6f5730664ad4f022fc99b70878fd0d  ci/p60_native_oauth_source.patch.gz' | shasum -a 256 -c -
+          gzip -cd ci/p60_native_oauth_source.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          echo 'b880bcbd78b2113043b938c8114c01519bd4302711cbc78b0d4cff0cc0dd77df  Sources/Portal.swift' | shasum -a 256 -c -
+          echo '819423e7dab78899791b99e69c1645642407c9e1c44cd2229965321ed3d4d9d5  Sources/MainView.swift' | shasum -a 256 -c -
+          echo '748ca73aed7b1938f9c941526e2f6d6f40fa750c34d8ff8a72e40e54922678bc  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
+          test "$(find Sources -maxdepth 1 -name '*.swift' -type f | wc -l | tr -d ' ')" -eq 108
+          bash Tests/run_p60_offline.sh
+      - name: Verify public OAuth entry redirect without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess,urllib.parse
+          url='https://synergia.librus.pl/loguj/portalRodzina'
+          process=subprocess.run(['curl','--head','--silent','--show-error','--max-time','18','--output','/dev/null','--write-out','%{http_code} %{ssl_verify_result}','--location-trusted',url],capture_output=True,text=True)
+          print('anonymous_public_endpoint_head_status',process.stdout.split(' ')[0] if process.stdout else 'unavailable')
+          print('anonymous_tls_probe_exit',process.returncode)
+          PY
+      - name: Apply P61 verified OAuth 302 continuation and regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '26781ae0cefb70735fad098d010fe8688c80a76de05c601a398be73af14d7e48  ci/p61_http302_redirect_source.patch.gz' | shasum -a 256 -c -
+          gzip -cd ci/p61_http302_redirect_source.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          echo 'f908b6726552562641a48f5bb98f54aa6c0faf6caa4fb2a8271532b5b1b960a4  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
+          echo '2335fe5a74138347f53dca6a87c4062980f623d1ae9c97dedb1f85c7ddf43fe4  Tests/p61_oauth_redirect_standalone.swift' | shasum -a 256 -c -
+          bash Tests/run_p61_offline.sh
+      - name: Apply exact P64 OAuth and DeviceCookie fixes to P61 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'e876bd63664c6285d519470801bef16c23903670c1530e7d43da2bd4287c32b2  ci/p64_delta.patch.gz.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import base64,gzip,pathlib
+          path=pathlib.Path('ci/p64_delta.patch.gz.b64')
+          pathlib.Path('/tmp/p64_verified.patch').write_bytes(gzip.decompress(base64.b64decode(path.read_text())))
+          PY
+          echo 'ea3883d44aae85addb9d2ad7a822624dabbcb9bb5adba2892355f484bc7395c1  /tmp/p64_verified.patch' | shasum -a 256 -c -
+          patch -p1 -d synergia-direct-ios < /tmp/p64_verified.patch
+          cd synergia-direct-ios
+          echo '4a60f6d01a131add9fe4478eea65e24282ccaf3883123a310a5804a084d96d44  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
+          echo 'f6a6523920f0753ea63e92b38627f1624c1e6fdd54a78af98168a35f6ca27a57  Sources/Portal.swift' | shasum -a 256 -c -
+          swiftc -frontend -parse Sources/*.swift
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build iOS device app without signing
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee xcodebuild.log
+      - name: Pack and test unsigned IPA
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d build/Build/Products/Release-iphoneos/SynergiaDirect.app
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
+          zip -qry SYNERGIA_DIRECT_v0_31_P64_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v0_31_P64_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v0_31_P64_UNSIGNED.ipa
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SYNERGIA_DIRECT_v0_31_P64_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v0_31_P64_UNSIGNED.ipa
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload Xcode build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SYNERGIA_DIRECT_P64_XCODE_LOG
+          path: synergia-direct-ios/xcodebuild.log
+          retention-days: 14
+          if-no-files-found: ignore
