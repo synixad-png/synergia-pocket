@@ -350,10 +350,11 @@ jobs:
           set -euo pipefail
           echo '349f60bac5b1e34ce9c2be9c11962a9b732847213fdb7562d444633a8956df93  ci/p75_notes.patch.br.b64' | shasum -a 256 -c -
           python3 - <<'PY'
-          import pathlib,base64,brotli
+          import pathlib,base64
           payload=pathlib.Path('ci/p75_notes.patch.br.b64').read_text().strip()
-          pathlib.Path('/tmp/p75_notes.patch').write_bytes(brotli.decompress(base64.b64decode(payload)))
+          pathlib.Path('/tmp/p75_notes.patch.br').write_bytes(base64.b64decode(payload))
           PY
+          brotli --decompress --stdout /tmp/p75_notes.patch.br > /tmp/p75_notes.patch
           echo '364376004fd1ddeb6c930292e7167295d442a89151dbc871a77d2e0c3647b141  /tmp/p75_notes.patch' | shasum -a 256 -c -
           cd synergia-direct-ios
           printf '%s\n' '29748b05ed32a3c13940de671c0a003f2a08d9bd4acd507b0962d85376473d1c  Sources/MainView.swift' '487dbd8b5fc2612c9eb7f48f9e55f2903b2037d870b99d10ac9ffb00ebd956d4  Sources/DirectPocketStyle.swift' '083654fc75d795117f170a3d65cbbf94feb2c9d68099d53762f636707b855b9e  Sources/SynergiaGatewayClient.swift' | shasum -a 256 -c -
