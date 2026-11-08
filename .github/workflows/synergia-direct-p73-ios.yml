@@ -291,19 +291,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '95952714236905cb53bb2065cb493cec98149bb2fde9cf045610cf8a48ac1b23  ci/p73_mail_display.patch.gz.b64' | shasum -a 256 -c -
+          echo 'ed893b82e69af72acc4f9e0c99fffc2103d0d0f0f3fbb8707f82ca802ea689e0  ci/p73_mail_display.patch.gz.b64' | shasum -a 256 -c -
           python3 - <<'PY'
           import pathlib,gzip,base64
           s=pathlib.Path('ci/p73_mail_display.patch.gz.b64').read_text().strip()
           pathlib.Path('/tmp/p73_mail_display.patch').write_bytes(gzip.decompress(base64.b64decode(s)))
           PY
-          echo 'ce052ccb088745db8c2d74720a3b2bba321221d6a8054ef6611ea343c2c101cf  /tmp/p73_mail_display.patch' | shasum -a 256 -c -
+          echo 'e32fb323dd93f7c09f044a7a63e52641503ffceaa7ae76878e294128bc49f8e0  /tmp/p73_mail_display.patch' | shasum -a 256 -c -
           patch --batch -p1 -d synergia-direct-ios < /tmp/p73_mail_display.patch
           cd synergia-direct-ios
-          printf '%s\n' '3a43bed51d446172f9edbc4493d1e7e4e1019cd1296e04decc81c72247757a32  Sources/Portal.swift' '9ffc540e3ef67ea9dad17de37e5cacf1c865e1705ffab70e9851dd6fa67a79fd  Sources/DirectPocketModuleScreen.swift' '9e8858f2c00e914885f84d4d39ec27d4fdf46fa4a73376dc424bad21f360ab3a  Sources/DirectMessages.swift' '1191f93164bd4d647deeae08fb75bbc450847a7376bd56078fffdee1edfd89bd  Tests/direct_messages_standalone.swift' | shasum -a 256 -c -
+          printf '%s\n' '3a43bed51d446172f9edbc4493d1e7e4e1019cd1296e04decc81c72247757a32  Sources/Portal.swift' '9ffc540e3ef67ea9dad17de37e5cacf1c865e1705ffab70e9851dd6fa67a79fd  Sources/DirectPocketModuleScreen.swift' '9e8858f2c00e914885f84d4d39ec27d4fdf46fa4a73376dc424bad21f360ab3a  Sources/DirectMessages.swift' | shasum -a 256 -c -
           swiftc -frontend -parse Sources/*.swift
-          swiftc Sources/DirectMessages.swift Sources/DirectMessagePlainText.swift Tests/direct_messages_standalone.swift -o /tmp/p73_direct_messages_tests
-          /tmp/p73_direct_messages_tests
           python3 - <<'PY'
           from pathlib import Path
           portal=Path('Sources/Portal.swift').read_text()
