@@ -255,7 +255,7 @@ jobs:
           echo 'a62b2b223462c453bfb017da596867ea36a32a3f981a49520bf63b880155fc72  /tmp/p71_verified.patch' | shasum -a 256 -c -
           patch --batch -p1 -d synergia-direct-ios < /tmp/p71_verified.patch
           cd synergia-direct-ios
-          printf '%s\\n' '3d0b054e5f845ecaed4257d8315461fa140dd6c228a41c0da6ce9cef7a8df9fc  Sources/Portal.swift' '991ed3f882d4d564fafbd8524d87bcbff40f1cdaa6a3cff6fa44f18af82362ba  Sources/SynergiaMessagesClient.swift' 'f665f56cdaf8a0260652f87786c6035f5c4a7bad77d337a17d48bc9056f01b8c  Sources/DirectPocketModuleScreen.swift' '3a8317f5cdf8e1be9f0dc050fcf1fa2d34d4adf543a4915c985c40bb10357e9f  Sources/DirectMessagesSessionBootstrap.swift' | shasum -a 256 -c -
+          printf '%s\n' '3d0b054e5f845ecaed4257d8315461fa140dd6c228a41c0da6ce9cef7a8df9fc  Sources/Portal.swift' '991ed3f882d4d564fafbd8524d87bcbff40f1cdaa6a3cff6fa44f18af82362ba  Sources/SynergiaMessagesClient.swift' 'f665f56cdaf8a0260652f87786c6035f5c4a7bad77d337a17d48bc9056f01b8c  Sources/DirectPocketModuleScreen.swift' '3a8317f5cdf8e1be9f0dc050fcf1fa2d34d4adf543a4915c985c40bb10357e9f  Sources/DirectMessagesSessionBootstrap.swift' | shasum -a 256 -c -
           swiftc -frontend -parse Sources/*.swift
           python3 Tests/verify_p71_mailbox_sso.py
       - name: Install XcodeGen
