@@ -1,0 +1,69 @@
+--- a/Sources/MainView.swift
++++ b/Sources/MainView.swift
+@@ -797,8 +797,13 @@
+                                 loading: portal.directMessagesBusy == mailbox,
+                                 failed: true, count: nil, capturedAt: nil, complete: false))
+                         }
+-                        Text(portal.directMessagesStatus[mailbox] ?? "Nie odczytano skrzynki")
+-                            .font(.caption).foregroundStyle(.secondary)
++                        if let status = portal.directMessagesStatus[mailbox] {
++                            Text(status)
++                                .font(.caption).foregroundStyle(.secondary)
++                        } else if portal.directMailboxes[mailbox] == nil {
++                            Text("Wczytywanie skrzynki…")
++                                .font(.caption).foregroundStyle(.secondary)
++                        }
+                         if let snapshot = portal.directMailboxes[mailbox],
+                            let presented = DirectMailboxPresentation.present(
+                                 snapshot: snapshot,
+@@ -970,7 +975,7 @@
+                     if portal.directFeedBusy == module || portal.directFeedBatchBusy {
+                         ProgressView("Trwa odczyt JSON…")
+                     }
+-                    Text(portal.directFeedStatus[module] ?? "Nie pobierano danych JSON")
++                    Text(portal.directFeedStatus[module] ?? "Wczytywanie informacji…")
+                         .font(.caption).foregroundStyle(.secondary)
+                     if let change = portal.directFeedDeltas[module] {
+                         Text(change.summary).font(.caption).foregroundStyle(.secondary)
+--- a/Sources/Portal.swift
++++ b/Sources/Portal.swift
+@@ -816,12 +816,13 @@
+         if automaticLoadOwner != owner { resetAutomaticModuleQueue(for: owner) }
+         if force {
+             automaticallyLoaded.remove(module)
+-        } else if automaticallyLoaded.contains(module) && failedDirectReads.contains(module),
+-                  let last = lastAutomaticAttempt[module],
+-                  Date().timeIntervalSince(last) > 45 {
+-            // Retry on a later user visit after a real failed GET, not on a
+-            // timer. Avoid a rapid loop during a server outage.
+-            automaticallyLoaded.remove(module)
++        } else if automaticallyLoaded.contains(module),
++                  let last = lastAutomaticAttempt[module] {
++            let age = Date().timeIntervalSince(last)
++            // Pocket loads fresh data on returning to an old tab. After a
++            // failure use a shorter, bounded cooldown, but never a timer.
++            let cooldown: TimeInterval = failedDirectReads.contains(module) ? 45 : 300
++            if age > cooldown { automaticallyLoaded.remove(module) }
+         }
+         guard !automaticallyLoaded.contains(module) else { return }
+         if let index = pendingAutomaticModules.firstIndex(of: module) {
+@@ -895,7 +896,8 @@
+     func loadMailboxIfNeeded(_ mailbox: DirectMailbox) {
+         guard let owner = store.verifiedAccountId, !privacyShieldActive,
+               !backgroundSuspended, !sessionLifecycle.isClearing else { return }
+-        if let snapshot = directMailboxes[mailbox], snapshot.accountId == owner { return }
++        if let snapshot = directMailboxes[mailbox], snapshot.accountId == owner,
++           Date().timeIntervalSince(snapshot.fetchedAt) < 300 { return }
+         let epoch = accountEpoch
+         Task { @MainActor [weak self] in
+             guard let self else { return }
+@@ -903,7 +905,8 @@
+                 guard !Task.isCancelled, self.accountEpoch == epoch,
+                       self.store.verifiedAccountId == owner,
+                       !self.privacyShieldActive, !self.backgroundSuspended else { return }
+-                if let snapshot = self.directMailboxes[mailbox], snapshot.accountId == owner { return }
++                if let snapshot = self.directMailboxes[mailbox], snapshot.accountId == owner,
++                   Date().timeIntervalSince(snapshot.fetchedAt) < 300 { return }
+                 if !self.automaticNetworkBusy && !self.messageBootstrapPending &&
+                    self.automaticLoadingModule != .messages &&
+                    !self.pendingAutomaticModules.contains(.messages) {
