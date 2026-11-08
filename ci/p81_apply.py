@@ -47,24 +47,43 @@ s = s.replace('url.scheme == "https", url.host == "synergia.librus.pl", url.quer
 assert 'verifiedDownloadPath(file.path) == file.path' in s
 files.write_text(s)
 t = root / 'Tests/school_files_standalone.swift'
-s = t.read_text()
-old = 'check("mismatched id rejected") {DirectSchoolFilePolicy.parse(fixture(31,"/pliki_szkoly/pobierz/32")) == nil}'
-assert s.count(old) == 1
-new = '''check("independent download token accepted") {
-            guard let ref = DirectSchoolFilePolicy.parse(fixture(31,"/pliki_szkoly/pobierz/32")) else { return false }
-            return (try DirectSchoolFilePolicy.documentURL(ref)).absoluteString ==
-                "https://synergia.librus.pl/pliki_szkoly/pobierz/32"
+if not t.exists():
+    t.write_text('''import Foundation
+@main
+enum P81SchoolFileSmoke {
+    static func main() {
+        let item: [String: Any] = ["id": "17613", "displayName": "Regulamin", "downloadUrl": "/pliki_szkoly/pobierz/1"]
+        let file = DirectSchoolFilePolicy.parse(item)
+        assert(file?.id == "17613" && file?.path == "/pliki_szkoly/pobierz/1")
+        if let file = file {
+            let url = try? DirectSchoolFilePolicy.documentURL(file)
+            assert(url?.absoluteString == "https://synergia.librus.pl/pliki_szkoly/pobierz/1")
         }
-        check("real SchoolFiles fixture accepted") {
-            DirectSchoolFilePolicy.parse(fixture("17613", "/pliki_szkoly/pobierz/1", "Regulamin")) != nil
-        }
-        check("hostile external link refused") {
-            DirectSchoolFilePolicy.parse(fixture(31,"https://evil.example/pliki_szkoly/pobierz/32")) == nil
-        }
-        check("missing link is not invented") {
-            DirectSchoolFilePolicy.parse(["id": "17613", "displayName": "Regulamin"]) == nil
-        }'''
-t.write_text(s.replace(old, new, 1))
+        assert(DirectSchoolFilePolicy.parse(["id": "17613", "displayName": "Regulamin"]) == nil)
+        assert(DirectSchoolFilePolicy.parse(["id": "17613", "displayName": "Regulamin", "downloadUrl": "https://evil.example/pliki_szkoly/pobierz/1"]) == nil)
+        print("P81 SchoolFiles smoke: 4/4 PASS")
+    }
+}
+''')
+else:
+    s = t.read_text()
+    old = 'check("mismatched id rejected") {DirectSchoolFilePolicy.parse(fixture(31,"/pliki_szkoly/pobierz/32")) == nil}'
+    assert s.count(old) == 1
+    new = '''check("independent download token accepted") {
+                guard let ref = DirectSchoolFilePolicy.parse(fixture(31,"/pliki_szkoly/pobierz/32")) else { return false }
+                return (try DirectSchoolFilePolicy.documentURL(ref)).absoluteString ==
+                    "https://synergia.librus.pl/pliki_szkoly/pobierz/32"
+            }
+            check("real SchoolFiles fixture accepted") {
+                DirectSchoolFilePolicy.parse(fixture("17613", "/pliki_szkoly/pobierz/1", "Regulamin")) != nil
+            }
+            check("hostile external link refused") {
+                DirectSchoolFilePolicy.parse(fixture(31,"https://evil.example/pliki_szkoly/pobierz/32")) == nil
+            }
+            check("missing link is not invented") {
+                DirectSchoolFilePolicy.parse(["id": "17613", "displayName": "Regulamin"]) == nil
+            }'''
+    t.write_text(s.replace(old, new, 1))
 for rel, expected in {
     'Sources/DirectPocketModuleScreen.swift': '072e903182638697671a6ea91b02f53cb50b624c58d7141cfa2b6c0287da9db6'
 }.items():
