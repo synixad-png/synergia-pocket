@@ -646,13 +646,16 @@ jobs:
               static func main() throws {
                   let file: [String: Any] = ["id":"17613","displayName":"Regulamin","downloadUrl":"/pliki_szkoly/pobierz/1"]
                   let ref = DirectSchoolFilePolicy.parse(file)!
-                  assert((try DirectSchoolFilePolicy.documentURL(ref)).absoluteString == "https://synergia.librus.pl/pliki_szkoly/pobierz/1")
+                  let documentURL = try DirectSchoolFilePolicy.documentURL(ref)
+          assert(documentURL.absoluteString == "https://synergia.librus.pl/pliki_szkoly/pobierz/1")
                   guard case .getFile(let g) = try DirectSchoolFilePolicy.sandboxTicket("https://sandbox.librus.pl/GetFile/x") else { fatalError("GetFile") }
                   assert(g.path == "/GetFile/x")
                   guard case .singleUseKey(let p,let key) = try DirectSchoolFilePolicy.sandboxTicket("https://sandbox.librus.pl/index.php?action=CSTryToDownload&singleUseKey=abc_123") else { fatalError("key") }
                   assert(p.host == "sandbox.librus.pl" && key == "abc_123")
-                  assert((try DirectSchoolFilePolicy.sandboxActionURL("CSCheckKey")).absoluteString == "https://sandbox.librus.pl/index.php?action=CSCheckKey")
-                  assert((try DirectSchoolFilePolicy.sandboxActionURL("CSDownload",key:key)).query!.contains("singleUseKey=abc_123"))
+                  let statusURL = try DirectSchoolFilePolicy.sandboxActionURL("CSCheckKey")
+          assert(statusURL.absoluteString == "https://sandbox.librus.pl/index.php?action=CSCheckKey")
+                  let fileURL = try DirectSchoolFilePolicy.sandboxActionURL("CSDownload",key:key)
+          assert(fileURL.query!.contains("singleUseKey=abc_123"))
                   assert(DirectSchoolFilePolicy.safeFilename("folder/regulamin").contains("_"))
                   assert(DirectSchoolFilePolicy.safeFilename("Regulamin",contents: Data("%PDF-1.7".utf8)) == "Regulamin.pdf")
                   assert(DirectSchoolFilePolicy.maxBytes == 20 * 1024 * 1024)
