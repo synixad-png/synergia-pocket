@@ -160,6 +160,14 @@ jobs:
           printf '%s\n' 'fa948a0340ffac1afcec71eb573b231e869c6da57dd57f8f7f38e9d67442dc7a  Sources/MainView.swift' 'e0ea6cd2cfdf6d22bdc1ab73ac06a9f403349272602d4cfe300f2171af3229d4  Sources/Portal.swift' '1a08806530a6ccfe319071293fe6535ca0c183bce7ce530ab97926912ef940dc  Sources/DirectPocketStyle.swift' | shasum -a 256 -c -
           test "$(find Sources -maxdepth 1 -name '*.swift' -type f | wc -l | tr -d ' ')" -eq 110
           swiftc -frontend -parse Sources/*.swift
+      - name: Avoid SwiftUI giant-expression typecheck regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ci/p67_refactor_typecheck.py synergia-direct-ios
+          echo 'dd13f5569299eb09ec7712289e703f7df5f0c9241e1aa30861e5b6f9a12b8706  synergia-direct-ios/Sources/MainView.swift' | shasum -a 256 -c -
+          cd synergia-direct-ios
+          swiftc -frontend -parse Sources/*.swift
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Build iOS device app without signing
