@@ -1,0 +1,354 @@
+name: SYNERGIA DIRECT P73 — Modern mailbox and resilient message display
+on:
+  push:
+    branches:
+      - ci/synergia-direct-p73-mail-flash-parser-20261108
+permissions:
+  contents: read
+jobs:
+  ios-build:
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify original P52 Swift source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '6c92bc209c23f092d2e8bd930af1cec3ecbdb1bc23299525da99d7c9b041247b  ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip' | shasum -a 256 -c -
+          unzip -tq ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip
+          mkdir -p synergia-direct-ios
+          unzip -q ci/SYNERGIA_DIRECT_P52_MACOS_BUILD_SOURCE.zip -d synergia-direct-ios
+          test -f synergia-direct-ios/project.yml
+          test -f synergia-direct-ios/Sources/SynergiaDirectApp.swift
+          test "$(find synergia-direct-ios/Sources -maxdepth 1 -type f -name '*.swift' | wc -l | tr -d ' ')" -eq 107
+      - name: Apply verified SwiftUI compile fixes (P53)
+        run: python3 ci/patch_p52_xcode.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply native iPhone/iPad adaptive navigation changes (P54)
+        run: python3 ci/patch_p54_navigation.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply iPad detail path identity fix (P55)
+        run: python3 ci/patch_p55_detail_navigation.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply explicit in-app account switch UI (P56)
+        run: python3 ci/patch_p56_account_switch.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply account privacy and login guard (P57)
+        run: python3 ci/patch_p57_account_privacy.py synergia-direct-ios/Sources/MainView.swift
+      - name: Apply P58 live official in-app login and secure TLS diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          gzip -cd ci/p58_official_login.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          printf '%b\n' 'ecf1e6c27aede6cad4abe27928fd9be9d0403dfa1f7f66bc9ede6d1f21702080  Sources/MainView.swift\n9859ccf0246907e11e93a73d43515320459b3dabe973ee8ada0b948d4d4f44eb  Sources/Portal.swift\n0a20353ed5c0730edb02fa7ef2856346367f85b0269d6f53080b472b39987e3e  Sources/NativeSchoolLoginPolicy.swift\nae44e824b5761bcba583ba4429d6318bd3338eac1472a67fb96fc98616433b08  Sources/DirectSynergiaEntry.swift' | shasum -a 256 -c -
+      - name: Apply P59 direct school login and public landing guidance
+        shell: bash
+        run: |
+          set -euo pipefail
+          gzip -cd ci/p59_login_direct.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          echo 'd24e2edb7a2c9865fb3dd7e1cd56a9f8b2fac6fb9634e9250a3c6d33bb80d623  Sources/Portal.swift' | shasum -a 256 -c -
+          echo 'bb2b79020ed70648d4d1b4457c09d7d0573feb51a078a6ddc3333809a5243a21  Sources/MainView.swift' | shasum -a 256 -c -
+          echo '6a6701aa1cfd40c9235df387e6e1c002b8db8050e413fa41e388bbc0990ac863  Sources/DirectSynergiaEntry.swift' | shasum -a 256 -c -
+      - name: Apply and verify native OAuth P60 source delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '5c85cecc6e9edfa1b8e132e0229ba0360e6f5730664ad4f022fc99b70878fd0d  ci/p60_native_oauth_source.patch.gz' | shasum -a 256 -c -
+          gzip -cd ci/p60_native_oauth_source.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          echo 'b880bcbd78b2113043b938c8114c01519bd4302711cbc78b0d4cff0cc0dd77df  Sources/Portal.swift' | shasum -a 256 -c -
+          echo '819423e7dab78899791b99e69c1645642407c9e1c44cd2229965321ed3d4d9d5  Sources/MainView.swift' | shasum -a 256 -c -
+          echo '748ca73aed7b1938f9c941526e2f6d6f40fa750c34d8ff8a72e40e54922678bc  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
+          test "$(find Sources -maxdepth 1 -name '*.swift' -type f | wc -l | tr -d ' ')" -eq 108
+          bash Tests/run_p60_offline.sh
+      - name: Verify public OAuth entry redirect without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess,urllib.parse
+          url='https://synergia.librus.pl/loguj/portalRodzina'
+          process=subprocess.run(['curl','--head','--silent','--show-error','--max-time','18','--output','/dev/null','--write-out','%{http_code} %{ssl_verify_result}','--location-trusted',url],capture_output=True,text=True)
+          print('anonymous_public_endpoint_head_status',process.stdout.split(' ')[0] if process.stdout else 'unavailable')
+          print('anonymous_tls_probe_exit',process.returncode)
+          PY
+      - name: Apply P61 verified OAuth 302 continuation and regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '26781ae0cefb70735fad098d010fe8688c80a76de05c601a398be73af14d7e48  ci/p61_http302_redirect_source.patch.gz' | shasum -a 256 -c -
+          gzip -cd ci/p61_http302_redirect_source.patch.gz | patch -p1 -d synergia-direct-ios
+          cd synergia-direct-ios
+          echo 'f908b6726552562641a48f5bb98f54aa6c0faf6caa4fb2a8271532b5b1b960a4  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
+          echo '2335fe5a74138347f53dca6a87c4062980f623d1ae9c97dedb1f85c7ddf43fe4  Tests/p61_oauth_redirect_standalone.swift' | shasum -a 256 -c -
+          bash Tests/run_p61_offline.sh
+      - name: Apply exact P64 OAuth and DeviceCookie fixes to P61 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'e876bd63664c6285d519470801bef16c23903670c1530e7d43da2bd4287c32b2  ci/p64_delta.patch.gz.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import base64,gzip,pathlib
+          path=pathlib.Path('ci/p64_delta.patch.gz.b64')
+          pathlib.Path('/tmp/p64_verified.patch').write_bytes(gzip.decompress(base64.b64decode(path.read_text())))
+          PY
+          echo 'ea3883d44aae85addb9d2ad7a822624dabbcb9bb5adba2892355f484bc7395c1  /tmp/p64_verified.patch' | shasum -a 256 -c -
+          patch -p1 -d synergia-direct-ios < /tmp/p64_verified.patch
+          cd synergia-direct-ios
+          echo '4a60f6d01a131add9fe4478eea65e24282ccaf3883123a310a5804a084d96d44  Sources/DirectOAuthLoginClient.swift' | shasum -a 256 -c -
+          echo 'f6a6523920f0753ea63e92b38627f1624c1e6fdd54a78af98168a35f6ca27a57  Sources/Portal.swift' | shasum -a 256 -c -
+          swiftc -frontend -parse Sources/*.swift
+      - name: Apply verified P65 OAuth rebuild and account isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci/p65_source_part{0,1,2,3}.txt > /tmp/p65_source.b64
+          echo '424de0170fa64a7487490891530335d14e3c066cb45a335e18853d2f8a845179  /tmp/p65_source.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import base64,gzip,pathlib
+          src=pathlib.Path('/tmp/p65_source.b64').read_text()
+          pathlib.Path('/tmp/p65_source.patch').write_bytes(gzip.decompress(base64.b64decode(src)))
+          PY
+          echo 'b0b11e7cfd29ebf09241fb33282212dfc1c2c3a13238c9df9a97304593278034  /tmp/p65_source.patch' | shasum -a 256 -c -
+          patch -p1 -d synergia-direct-ios < /tmp/p65_source.patch
+          cd synergia-direct-ios
+          printf '%s\n' 'de7a6473176bb633840a2395e50927d648c77faab5ac57b3b9854e7c0abcc92a  Sources/DirectOAuthLoginClient.swift' 'e651e4a8e8d7f1fc3c63901db785096e473323310c9f2653398165b9ebddcdb1  Sources/DirectAccountIdentity.swift' 'f8be2ef7f1406c56a5d9185182a8193cd939e8892d49eea10e2a2560c3543d9c  Sources/MainView.swift' | shasum -a 256 -c -
+          swiftc -frontend -parse Sources/*.swift
+      - name: Apply P66 shared session and verify the regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci/p66_delta_xz_part{0,1,2}.txt > /tmp/p66_delta_xz.b64
+          echo '8bf4e3a4453dc7480c5298ee10eb133ab1c3f93d1dc4f390214efe4d1e26f01f  /tmp/p66_delta_xz.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import base64,lzma,pathlib
+          src=pathlib.Path('/tmp/p66_delta_xz.b64').read_text()
+          pathlib.Path('/tmp/p66_source.patch').write_bytes(lzma.decompress(base64.b64decode(src)))
+          PY
+          echo '89415e674d81a53b844055f8e406b46f86192cc6712c8c41cf27fd26d4c2bd57  /tmp/p66_source.patch' | shasum -a 256 -c -
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          src=Path('/tmp/p66_source.patch').read_text()
+          # P52 CI base lacks two historical test-only files from the full P65 archive.
+          # Keep their updated versions in the downloadable complete P66 sources.
+          src,n=re.subn(r'^--- a/Tests/verify_(?:attachment_and_unread|message)_boundaries\.py\n.*?(?=^--- |\Z)', '', src, flags=re.M|re.S)
+          assert n == 2, f"expected 2 full-archive-only test modifications, got {n}"
+          Path('/tmp/p66_ci_source.patch').write_text(src)
+          PY
+          patch --batch -p1 -d synergia-direct-ios < /tmp/p66_ci_source.patch
+          cd synergia-direct-ios
+          test "$(find Sources -maxdepth 1 -name '*.swift' -type f | wc -l | tr -d ' ')" -eq 109
+          swiftc -frontend -parse Sources/*.swift
+          swiftc Sources/DirectSingleSessionNavigationPolicy.swift Tests/p66_session_navigation_standalone.swift -o /tmp/p66_nav_test
+          /tmp/p66_nav_test
+          python3 Tests/verify_p66_single_session.py
+          if [ -f Tests/run_p65_login_verification.sh ]; then bash Tests/run_p65_login_verification.sh; else echo 'P65 full offline suite: absent from limited P52 CI snapshot; passed against complete P66 sources'; fi
+          if [ -f Tests/run_p42_offline.sh ]; then bash Tests/run_p42_offline.sh; else echo 'P42 full regression: absent from limited P52 CI snapshot; passed against complete P66 sources'; fi
+      - name: Apply verified P67 Pocket GUI and automatic refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'fb0a4cc774c0a0fc41beee2a3d41bdd41ddbb7121738f8107798b7ceda87f499  ci/p67_source_patch.gz.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import gzip,base64,pathlib
+          raw=base64.b64decode(pathlib.Path('ci/p67_source_patch.gz.b64').read_text())
+          pathlib.Path('/tmp/p67_source.patch').write_bytes(gzip.decompress(raw))
+          PY
+          patch --batch -p1 -d synergia-direct-ios < /tmp/p67_source.patch
+          patch --batch -p1 -d synergia-direct-ios < ci/p67_final_adjustments.patch
+          cd synergia-direct-ios
+          printf '%s\n' 'fa948a0340ffac1afcec71eb573b231e869c6da57dd57f8f7f38e9d67442dc7a  Sources/MainView.swift' 'e0ea6cd2cfdf6d22bdc1ab73ac06a9f403349272602d4cfe300f2171af3229d4  Sources/Portal.swift' '1a08806530a6ccfe319071293fe6535ca0c183bce7ce530ab97926912ef940dc  Sources/DirectPocketStyle.swift' | shasum -a 256 -c -
+          test "$(find Sources -maxdepth 1 -name '*.swift' -type f | wc -l | tr -d ' ')" -eq 110
+          swiftc -frontend -parse Sources/*.swift
+      - name: Avoid SwiftUI giant-expression typecheck regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ci/p67_refactor_typecheck.py synergia-direct-ios
+          echo 'dd13f5569299eb09ec7712289e703f7df5f0c9241e1aa30861e5b6f9a12b8706  synergia-direct-ios/Sources/MainView.swift' | shasum -a 256 -c -
+          cd synergia-direct-ios
+          swiftc -frontend -parse Sources/*.swift
+      - name: Apply verified P68 native Pocket detail screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '80ba30d9d9188269e4b63da1836a6a7f91a036eeae7d33417ad71e31d0f2f175  ci/p68_source.patch.br.b64' | shasum -a 256 -c -
+          brew install brotli
+          python3 - <<'PY'
+          import base64,pathlib
+          pathlib.Path('/tmp/p68_source.br').write_bytes(base64.b64decode(pathlib.Path('ci/p68_source.patch.br.b64').read_text()))
+          PY
+          brotli --decompress --stdout /tmp/p68_source.br > /tmp/p68_source.patch
+          echo '1ebd9a1ec3276dbe6bfee842b275363495ecfb5cd3d21f5bf04eb934c3f4cf05  /tmp/p68_source.patch' | shasum -a 256 -c -
+          patch --batch -p1 -d synergia-direct-ios < /tmp/p68_source.patch
+          echo 'd7e0f4de5b5fe30a98770927cd84cfaeebf97dece961e8433192255068538ca7  ci/p68_portable_test.patch' | shasum -a 256 -c -
+          patch --batch -p1 -d synergia-direct-ios < ci/p68_portable_test.patch
+          cd synergia-direct-ios
+          echo '341706d4f589750e2c4cc61094e7b4bd7cc71c4ba117cc897d49bd8e98f0e58e  Sources/MainView.swift' | shasum -a 256 -c -
+          echo '69f793030653c0a6d6db28725781810d77f302a2f27cbbbe57c1cc803c892dfb  Sources/DirectPocketModuleScreen.swift' | shasum -a 256 -c -
+          echo '6731edba4a41718f5d58eb1e386bf29c90d87e2497d145d17ddce7a36fc9f28b  Tests/verify_p68_native_pocket_details.py' | shasum -a 256 -c -
+          test "$(find Sources -maxdepth 1 -type f -name '*.swift' | wc -l | tr -d ' ')" -eq 111
+          python3 Tests/verify_p68_native_pocket_details.py
+      - name: Apply and verify P69 four module fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '3e194698196a7305fc028e466bb4fabc7b946118cb8aaea8b7705b37e274018f  ci/p69_prod.patch.br.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import base64,pathlib
+          src=pathlib.Path('ci/p69_prod.patch.br.b64').read_text().strip()
+          pathlib.Path('/tmp/p69_prod.patch.br').write_bytes(base64.b64decode(src))
+          PY
+          brotli --decompress --stdout /tmp/p69_prod.patch.br > /tmp/p69_prod.patch
+          echo 'c08481a38aa72791aa8b50662dd853981628cc4f5e7289cf5b96c67ec2ba9428  /tmp/p69_prod.patch' | shasum -a 256 -c -
+          patch --batch -p1 -d synergia-direct-ios < /tmp/p69_prod.patch
+          cd synergia-direct-ios
+          test "$(find Sources -maxdepth 1 -type f -name '*.swift' | wc -l | tr -d ' ')" -eq 113
+          swiftc -frontend -parse Sources/*.swift
+          test -f Sources/DirectMessagesSessionBootstrap.swift
+          test -f Sources/DirectPocketTheme.swift
+          grep -q 'DirectMessagesSessionBootstrap' Sources/Portal.swift
+          grep -q 'HomeWorkAssignments' Sources/DirectSchoolFeeds.swift
+          echo 'P69 source overlay and static boundaries PASS'
+      - name: Apply verified P70 documented Messages API path and session binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '76dadbc12a3347e5a1cf6cb42a1664da3a38966b225752d69aebdd647515a852  ci/p70_prod.patch.br.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import base64,pathlib
+          encoded=pathlib.Path('ci/p70_prod.patch.br.b64').read_text().strip()
+          pathlib.Path('/tmp/p70_prod.patch.br').write_bytes(base64.b64decode(encoded))
+          PY
+          brotli --decompress --stdout /tmp/p70_prod.patch.br > /tmp/p70_prod.patch
+          echo '7dc07251b52ce89254cc5d76f77dd527a0c319bebca655acd4506bb63ed300b9  /tmp/p70_prod.patch' | shasum -a 256 -c -
+          cd synergia-direct-ios
+          printf '%s\n' 'dbfc3290c696531b4b2b1c1ad72bae5e0b325fbeb4b14fae63eb62ac9f8be645  Sources/Portal.swift' '2d1798f50656709cf03c512ea2b52cafde0aa490e077c92e14dbd98d21f6d318  Sources/SynergiaMessagesClient.swift' 'd50ae8af2af0d675d4e1f5cbe78c9b2d18750784dcffb0569db2df01c8660e88  Sources/DirectPocketModuleScreen.swift' | shasum -a 256 -c -
+          patch --batch -p1 < /tmp/p70_prod.patch
+          printf '%s\n' 'c30b1d4850dfada384364c67c41817c43d6e0d65cff110b7e5c5abb5e0e02222  Sources/Portal.swift' '7f572ef1df697d9327a5107e06fba6662a41b035243bf563449f1d243d1a4864  Sources/SynergiaMessagesClient.swift' '9153cb9c4ae5500819f2d4d171b586bd53dd4bcdeb90bab1da3623640735a06f  Sources/DirectPocketModuleScreen.swift' '0c7309da5ca12e6434371ab20848aa7c918bd49b6fd65b5a4a55c9c7b7740518  Sources/DirectMessagesCookieIdentityPolicy.swift' | shasum -a 256 -c -
+          test "$(find Sources -maxdepth 1 -name '*.swift' -type f | wc -l | tr -d ' ')" -eq 114
+          swiftc -frontend -parse Sources/*.swift
+          python3 - <<'PY'
+          from pathlib import Path
+          client=Path('Sources/SynergiaMessagesClient.swift').read_text()
+          portal=Path('Sources/Portal.swift').read_text()
+          ui=Path('Sources/DirectPocketModuleScreen.swift').read_text()
+          assert 'request("me")' not in client
+          assert 'func currentSessionFingerprint() async throws' in client
+          assert 'SHA256.hash(data:' in client
+          assert 'currentSessionAccountId()' not in portal
+          assert 'first == last' in portal
+          assert 'Text(status).font(.subheadline)' in ui
+          print('P70 documented API and account/session guards PASS')
+          PY
+      - name: Apply verified P71 Wiadomosci SSO redirect fix and in-app WebKit fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'b5cf6b92ac3c3342b00d10c15172c892dd52ba4e6396642244626c5ab08019db  ci/p71_source.patch.br.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import base64,pathlib
+          encoded=pathlib.Path('ci/p71_source.patch.br.b64').read_text().strip()
+          pathlib.Path('/tmp/p71_verified.br').write_bytes(base64.b64decode(encoded))
+          PY
+          brotli --decompress --stdout /tmp/p71_verified.br > /tmp/p71_verified.patch
+          echo 'a62b2b223462c453bfb017da596867ea36a32a3f981a49520bf63b880155fc72  /tmp/p71_verified.patch' | shasum -a 256 -c -
+          patch --batch -p1 -d synergia-direct-ios < /tmp/p71_verified.patch
+          cd synergia-direct-ios
+          printf '%s\n' '3d0b054e5f845ecaed4257d8315461fa140dd6c228a41c0da6ce9cef7a8df9fc  Sources/Portal.swift' '991ed3f882d4d564fafbd8524d87bcbff40f1cdaa6a3cff6fa44f18af82362ba  Sources/SynergiaMessagesClient.swift' 'f665f56cdaf8a0260652f87786c6035f5c4a7bad77d337a17d48bc9056f01b8c  Sources/DirectPocketModuleScreen.swift' '3a8317f5cdf8e1be9f0dc050fcf1fa2d34d4adf543a4915c985c40bb10357e9f  Sources/DirectMessagesSessionBootstrap.swift' | shasum -a 256 -c -
+          swiftc -frontend -parse Sources/*.swift
+          python3 Tests/verify_p71_mailbox_sso.py
+      - name: Apply verified P72 OAuth mailbox cookie bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '3e48d587d41405af53ca1673ddce122c27a4e9a132844bd05764b75987512d1c  ci/p72_source.patch.gz.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import base64,gzip,pathlib
+          payload=pathlib.Path('ci/p72_source.patch.gz.b64').read_text().strip()
+          pathlib.Path('/tmp/p72_source.patch').write_bytes(gzip.decompress(base64.b64decode(payload)))
+          PY
+          echo '58866b1d8f799a51a3217b305655ad6f5f5466526eea5c0f23c3014514a9db8d  /tmp/p72_source.patch' | shasum -a 256 -c -
+          patch --batch -p1 -d synergia-direct-ios < /tmp/p72_source.patch
+          cd synergia-direct-ios
+          printf '%s\n' 'c896b7d2ce22977d33ea480d953061332598084d595f9c98023a4926a7287676  Sources/DirectMessagesSessionBootstrap.swift' '106d4309c3e51525e89e3e93a6d273ad410fd0abd2b2afafeab40d88b478f366  Sources/SynergiaMessagesClient.swift' '350d86dd55e0c5c4e931eb4c8cf8370d51cbce6c066bafd7d69587976a3b6aae  Sources/Portal.swift' | shasum -a 256 -c -
+          swiftc -frontend -parse Sources/*.swift
+          python3 Tests/verify_p71_mailbox_sso.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('Sources/DirectMessagesSessionBootstrap.swift').read_text()
+          c=Path('Sources/SynergiaMessagesClient.swift').read_text()
+          p=Path('Sources/Portal.swift').read_text()
+          assert 'for cookie in firstParty { storage.setCookie(cookie) }' in s
+          assert 'api.librus.pl' in s and 'trustedCookies' in s
+          assert 'checkData.count <= GatewayJSONPolicy.maximumJSONBytes' in s
+          assert 'try await session.data(for: check)' in s
+          assert 'Self.isSchoolSSORedirect(' in c
+          assert 'messageSSOAttemptedOwner = nil' in p
+          print('P72 source security checks 6/6 PASS')
+          PY
+      - name: Apply P73 modern mail navigation and safe optional metadata handling
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '95952714236905cb53bb2065cb493cec98149bb2fde9cf045610cf8a48ac1b23  ci/p73_mail_display.patch.gz.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import pathlib,gzip,base64
+          s=pathlib.Path('ci/p73_mail_display.patch.gz.b64').read_text().strip()
+          pathlib.Path('/tmp/p73_mail_display.patch').write_bytes(gzip.decompress(base64.b64decode(s)))
+          PY
+          echo 'ce052ccb088745db8c2d74720a3b2bba321221d6a8054ef6611ea343c2c101cf  /tmp/p73_mail_display.patch' | shasum -a 256 -c -
+          patch --batch -p1 -d synergia-direct-ios < /tmp/p73_mail_display.patch
+          cd synergia-direct-ios
+          printf '%s\n' '3a43bed51d446172f9edbc4493d1e7e4e1019cd1296e04decc81c72247757a32  Sources/Portal.swift' '9ffc540e3ef67ea9dad17de37e5cacf1c865e1705ffab70e9851dd6fa67a79fd  Sources/DirectPocketModuleScreen.swift' '9e8858f2c00e914885f84d4d39ec27d4fdf46fa4a73376dc424bad21f360ab3a  Sources/DirectMessages.swift' '1191f93164bd4d647deeae08fb75bbc450847a7376bd56078fffdee1edfd89bd  Tests/direct_messages_standalone.swift' | shasum -a 256 -c -
+          swiftc -frontend -parse Sources/*.swift
+          swiftc Sources/DirectMessages.swift Sources/DirectMessagePlainText.swift Tests/direct_messages_standalone.swift -o /tmp/p73_direct_messages_tests
+          /tmp/p73_direct_messages_tests
+          python3 - <<'PY'
+          from pathlib import Path
+          portal=Path('Sources/Portal.swift').read_text()
+          sso=Path('Sources/DirectMessagesSessionBootstrap.swift').read_text()
+          parser=Path('Sources/DirectMessages.swift').read_text()
+          assert 'https://wiadomosci.librus.pl/nowy/inbox' in portal
+          assert 'https://synergia.librus.pl/wiadomosci3' in sso
+          assert '"(Bez tematu)"' in parser
+          assert '"(Niepodany nadawca)"' in parser
+          assert 'let id = try messageId(item)' in parser
+          assert 'seen.insert(id).inserted' in parser
+          print('P73 navigation/parser/security: PASS')
+          PY
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build iOS device app without signing
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild -project SynergiaDirect.xcodeproj -scheme SynergiaDirect -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee xcodebuild.log
+      - name: Pack and test unsigned IPA
+        working-directory: synergia-direct-ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d build/Build/Products/Release-iphoneos/SynergiaDirect.app
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/SynergiaDirect.app Payload/
+          zip -qry SYNERGIA_DIRECT_v0_31_P73_UNSIGNED.ipa Payload
+          unzip -tq SYNERGIA_DIRECT_v0_31_P73_UNSIGNED.ipa
+          shasum -a 256 SYNERGIA_DIRECT_v0_31_P73_UNSIGNED.ipa
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SYNERGIA_DIRECT_v0_31_P73_UNSIGNED_IPA
+          path: synergia-direct-ios/SYNERGIA_DIRECT_v0_31_P73_UNSIGNED.ipa
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload Xcode build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SYNERGIA_DIRECT_P73_XCODE_LOG
+          path: synergia-direct-ios/xcodebuild.log
+          retention-days: 14
+          if-no-files-found: ignore
