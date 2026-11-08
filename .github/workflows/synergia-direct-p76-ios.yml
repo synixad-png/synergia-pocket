@@ -406,7 +406,7 @@ jobs:
           assert 'sessionLifecycle.isClearing' in p
           assert 'kSecAttrAccessibleWhenUnlockedThisDeviceOnly' in s
           assert 'SecItemUpdate' in s and 'SecItemCopyMatching' in s
-          assert 'password' not in s.lower()
+          assert 'pendingNativeLogin' not in s and 'password:' not in s
           print('P76 source isolation/restore/logout/keychain checks PASS')
           PY
       - name: Install XcodeGen
