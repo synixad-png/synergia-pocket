@@ -1,0 +1,20 @@
+--- a/Tests/verify_p68_native_pocket_details.py
++++ b/Tests/verify_p68_native_pocket_details.py
+@@ -5,7 +5,7 @@
+ root=Path(__file__).resolve().parents[1]
+ main=(root/'Sources/MainView.swift').read_text()
+ new=(root/'Sources/DirectPocketModuleScreen.swift').read_text()
+-p67=Path('/mnt/data/synergia_direct_p67/Sources')
++protected={'Portal.swift': 'e0ea6cd2cfdf6d22bdc1ab73ac06a9f403349272602d4cfe300f2171af3229d4', 'DirectPocketStyle.swift': '1a08806530a6ccfe319071293fe6535ca0c183bce7ce530ab97926912ef940dc'}
+ checks={
+  'all primary navigation routes use redesigned screens': main.count('DirectPocketModuleScreen(module:')>=8,
+  'real grade records, not mocked numbers': 'portal.directGradeStore.grades' in new and 'DirectGradeDetailView(gradeID:' in new,
+@@ -30,7 +30,7 @@
+ for k,v in checks.items(): print(('PASS' if v else 'FAIL'),k)
+ assert all(checks.values())
+ for fn in ('Portal.swift','DirectPocketStyle.swift'):
+- assert hashlib.sha256((root/'Sources'/fn).read_bytes()).digest()==hashlib.sha256((p67/fn).read_bytes()).digest(),fn
++ assert hashlib.sha256((root/'Sources'/fn).read_bytes()).hexdigest()==protected[fn],fn
+ assert len(list((root/'Sources').glob('*.swift')))==111
+ r=subprocess.run(['swiftc','-frontend','-parse',*[str(f) for f in sorted((root/'Sources').glob('*.swift'))]],capture_output=True,text=True)
+ assert r.returncode==0,r.stderr
