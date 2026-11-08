@@ -637,6 +637,16 @@ jobs:
           printf '%s\n' '744b7bfe5af88ca695378b6f15872ec99dcb45c82c00b7db9b6385afc999158b  Sources/DirectSchoolFiles.swift' '5d140047562e1527d97f4d69d706ae0d1f1e616be7fe869e6b29fa1ba1554ee2  Sources/SynergiaSchoolFileClient.swift' '20b5195e7538043ccd43adbcfbccb1cd534c7abb5bc68c8c03a23512366af3ef  Sources/DirectSchoolFeeds.swift' '04d5595c198800563370e345e06960a1c6ec7f3c0101edb1030abb253a82758f  Sources/Portal.swift' | shasum -a 256 -c -
           patch --batch --fuzz=0 -p1 < /tmp/p82_sources_only.patch
           printf '%s\n' '9fcde3cac3da36c37965bcaca793a7f7497c3570669f6fc51020231d8a51412b  Sources/DirectSchoolFiles.swift' '8a282f1c7e26eec071d5aac3fd6d5ff1ad17636855eace6eca05fb4e2987d75e  Sources/SynergiaSchoolFileClient.swift' '6f05cab3ee404abd97fe0b752ead2756dd1758ccd7aadeaa318f40b435d3affd  Sources/DirectSchoolFeeds.swift' '7a4024b1e176641300db2a7ef349009f7e8df430df4fb46c4aaf018529b1c4ea  Sources/Portal.swift' | shasum -a 256 -c -
+          # Fix two compile-time argument labels against the verified
+          # unlabeled Swift API, preserving all other P82 source bytes.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('Sources/SynergiaSchoolFileClient.swift')
+          s=p.read_text()
+          assert s.count('sandboxActionURL(action:') == 2
+          p.write_text(s.replace('sandboxActionURL(action:', 'sandboxActionURL('))
+          PY
+          echo '86e93048ecc2d34e82470caf3d416de0822d00112bb1b1d7c4e4f80720f592a1  Sources/SynergiaSchoolFileClient.swift' | shasum -a 256 -c -
           swiftc -frontend -parse Sources/*.swift
           swiftc Sources/DirectSchoolFiles.swift Tests/school_files_standalone.swift -o /tmp/p82_ci_schoolfiles
           /tmp/p82_ci_schoolfiles
