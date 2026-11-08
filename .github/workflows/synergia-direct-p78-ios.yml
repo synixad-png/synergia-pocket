@@ -479,6 +479,23 @@ jobs:
           assert 'wiadomosci.librus.pl' in q and 'oauth_token' not in q
           print('P78 source safety and account-bound recovery checks PASS')
           PY
+      - name: Preserve active mailbox cookie under equivalent domain spellings
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '85b31d459f63ddc67cee3096b5a02c0552700337fd762805913b839c06328d89  ci/p78_mail_scope.delta.gz.b64' | shasum -a 256 -c -
+          python3 - <<'PY'
+          import gzip,base64,pathlib
+          data=pathlib.Path('ci/p78_mail_scope.delta.gz.b64').read_text().strip()
+          pathlib.Path('/tmp/p78_mail_scope.delta').write_bytes(gzip.decompress(base64.b64decode(data)))
+          PY
+          echo '7b8e712a8919fea42d49e00d49556f455f8668667e7556493e103d5e400f3c59  /tmp/p78_mail_scope.delta' | shasum -a 256 -c -
+          cd synergia-direct-ios
+          patch --batch -p1 < /tmp/p78_mail_scope.delta
+          printf '%s\n' 'db8d38c5510b4645abb25f151f2c404e53c13ef4f32cdc71d89e09152c87e5dc  Sources/DirectMailboxCookieRecoveryPolicy.swift' 'abaa7e24b756bb2a17ce25a868a12f27248ce71222d9aab2f210e10c81b11bec  Tests/p78_mailbox_cookie_recovery_standalone.swift' | shasum -a 256 -c -
+          swiftc Sources/DirectMailboxCookieRecoveryPolicy.swift Tests/p78_mailbox_cookie_recovery_standalone.swift -o /tmp/p78_final_cookie_test
+          /tmp/p78_final_cookie_test
+          swiftc -frontend -parse Sources/*.swift
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Build iOS device app without signing
