@@ -620,6 +620,27 @@ jobs:
           Path('/tmp/p82_sources_only.patch').write_text(patch)
           PY
           cd synergia-direct-ios
+          # The historical downloadable P81 source and the P81 CI patch have
+          # the same logic, but differ in one comment and line wrapping.
+          # Normalize to the exact protected P81 source before applying P82.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('Sources/DirectSchoolFiles.swift')
+          s=p.read_text()
+          old='''    /// The SchoolFiles record id and download URL token may differ.
+    /// Only a server-provided canonical path on the official Synergia host is allowed.'''
+          new='''    /// SchoolFiles uses a document id and a separate download token.
+    /// These are NOT guaranteed to match (confirmed fixture: id=17613, link=.../1).
+    /// The source link must be a canonical path on the single official origin.
+    /// No guessed endpoint is created when the server omits downloadUrl.'''
+          assert s.count(old) == 1
+          s=s.replace(old,new,1)
+          old2='''              url.query == nil,
+              url.fragment == nil, url.user == nil, url.password == nil else {'''
+          new2='''              url.query == nil, url.fragment == nil, url.user == nil, url.password == nil else {'''
+          assert s.count(old2) == 1
+          p.write_text(s.replace(old2,new2,1))
+          PY
           printf '%s\n' '744b7bfe5af88ca695378b6f15872ec99dcb45c82c00b7db9b6385afc999158b  Sources/DirectSchoolFiles.swift' '5d140047562e1527d97f4d69d706ae0d1f1e616be7fe869e6b29fa1ba1554ee2  Sources/SynergiaSchoolFileClient.swift' '20b5195e7538043ccd43adbcfbccb1cd534c7abb5bc68c8c03a23512366af3ef  Sources/DirectSchoolFeeds.swift' '04d5595c198800563370e345e06960a1c6ec7f3c0101edb1030abb253a82758f  Sources/Portal.swift' | shasum -a 256 -c -
           patch --batch --fuzz=0 -p1 < /tmp/p82_sources_only.patch
           printf '%s\n' '9fcde3cac3da36c37965bcaca793a7f7497c3570669f6fc51020231d8a51412b  Sources/DirectSchoolFiles.swift' '8a282f1c7e26eec071d5aac3fd6d5ff1ad17636855eace6eca05fb4e2987d75e  Sources/SynergiaSchoolFileClient.swift' '6f05cab3ee404abd97fe0b752ead2756dd1758ccd7aadeaa318f40b435d3affd  Sources/DirectSchoolFeeds.swift' '7a4024b1e176641300db2a7ef349009f7e8df430df4fb46c4aaf018529b1c4ea  Sources/Portal.swift' | shasum -a 256 -c -
