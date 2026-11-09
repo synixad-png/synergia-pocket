@@ -701,6 +701,21 @@ jobs:
           PY
           echo '2a3673b60f9a9f06140e11e5c403ce7edcd42e141bae5f7614cbe098b62d46ff  /tmp/p83_grade_ack.patch' | shasum -a 256 -c -
           cd synergia-direct-ios
+          # The original P81 downloadable source includes a three-line
+          # comment; the CI replay of P81 used the shorter one-line comment.
+          # Normalize this comment only, so the P83 patch applies to exactly
+          # the same P82 source bytes as supplied in the source ZIP.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('Sources/DirectPocketModuleScreen.swift')
+          s=p.read_text()
+          old='    // Observe independent unread state published by the grade store.'
+          new=('    // The store publishes read-status changes independently of SynergiaPortal.\n'
+               '    // Observe it directly so dismissing grade details immediately refreshes\n'
+               '    // the NOWA color and the unread counter without a network refresh.')
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new,1))
+          PY
           printf '%s\n' '607cc43ecb63f69ae2c28f0d08ae2c4f7737bc5517b362d592b53d08ccf87445  Sources/DirectPocketModuleScreen.swift' '591a681a1fa89be841cde19bdfd81f95a2056a0d72b7308441c96ff187a5288c  Sources/DirectGradeDetailView.swift' | shasum -a 256 -c -
           patch --batch --fuzz=0 -p1 < /tmp/p83_grade_ack.patch
           printf '%s\n' '09f889dd21b6a92cdd1e0788fa9865f0728fbb1f049c5645fa680a7d2ba6b7b7  Sources/DirectPocketModuleScreen.swift' '13ae543816deb2123003d1255764a525c001072eb5543f7322756c29fa1f3edd  Sources/DirectGradeDetailView.swift' | shasum -a 256 -c -
