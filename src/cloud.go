@@ -394,6 +394,7 @@ func runCloud() error {
 	server := &http.Server{Addr: net.JoinHostPort("0.0.0.0", port), Handler: app, ReadHeaderTimeout: 8 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32 << 10}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go logUpstreamReachability(ctx)
 	go func() {
 		timer := time.NewTicker(time.Minute)
 		defer timer.Stop()
