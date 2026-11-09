@@ -51,6 +51,7 @@ func probeUpstream(ctx context.Context, target string, client *http.Client) upst
 }
 
 func logUpstreamReachability(ctx context.Context) {
+	go logNetworkPath(ctx)
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
 	client := &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
