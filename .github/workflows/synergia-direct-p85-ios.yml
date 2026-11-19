@@ -747,9 +747,9 @@ jobs:
         run: |
           set -euo pipefail
           swiftc -frontend -parse Sources/*.swift
-          swiftc Sources/DirectOAuthLoginClient.swift Sources/DirectAccountIdentity.swift Sources/DirectSessionCookieSnapshot.swift Sources/DirectConnectionIssue.swift Sources/DirectSessionRecoveryPolicy.swift Sources/DirectGatewayRefreshPolicy.swift Tests/p85_session_recovery.swift -o /tmp/p85_session_tests
+          swiftc Sources/NativeSchoolLoginPolicy.swift Sources/DirectOAuthLoginClient.swift Sources/DirectAccountIdentity.swift Sources/DirectSessionCookieSnapshot.swift Sources/DirectConnectionIssue.swift Sources/DirectSessionRecoveryPolicy.swift Sources/DirectGatewayRefreshPolicy.swift Tests/p85_session_recovery.swift -o /tmp/p85_session_tests
           /tmp/p85_session_tests
-          swiftc Sources/DirectOAuthLoginClient.swift Sources/DirectAccountIdentity.swift Sources/DirectSessionCookieSnapshot.swift Tests/DirectSessionCookieSnapshotTests.swift -o /tmp/p85_existing_session_tests
+          swiftc Sources/NativeSchoolLoginPolicy.swift Sources/DirectOAuthLoginClient.swift Sources/DirectAccountIdentity.swift Sources/DirectSessionCookieSnapshot.swift Tests/DirectSessionCookieSnapshotTests.swift -o /tmp/p85_existing_session_tests
           /tmp/p85_existing_session_tests
       - name: Install XcodeGen
         run: brew install xcodegen
