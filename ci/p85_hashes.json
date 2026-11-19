@@ -1,0 +1,34 @@
+{
+  "Sources/Portal.swift": {
+    "before": "7a4024b1e176641300db2a7ef349009f7e8df430df4fb46c4aaf018529b1c4ea",
+    "after": "c0d01c304e34aa6ef7e9bf3f7f077fe1aa809f98b04009c06400f52d7f575cef"
+  },
+  "Sources/SynergiaGatewayClient.swift": {
+    "before": "47c38f3baf78600a5f349b130d0ee9ceaa4149f182c390fec2178b5b090941b9",
+    "after": "c2161619041f263f2a13eb73e6d079b819ed3142fae66db5c922be9f73638059"
+  },
+  "Sources/DirectSessionCookieSnapshot.swift": {
+    "before": "1e392e9ab21b0988e32e0a8d656d6010aee7141f76cc28506cf1104bfd8725f9",
+    "after": "b7227fa25c9ea640dd06d351ebd86138bbb4471290b705ddd49eac85b7fed536"
+  },
+  "Sources/DirectPocketNotesScreen.swift": {
+    "before": "73f3abc60a7ad58a8dba023f7a8005fb7b555938fe7be625bd16ea5ca3711fec",
+    "after": "b4d866d34b7f809a79d45063083fadc4de513212a628206d1281ade5986a66c8"
+  },
+  "Sources/DirectSessionRecoveryPolicy.swift": {
+    "before": null,
+    "after": "7a9290f0ea2add7ed365a08f229d3c23e236d3553a12039a259f7d9a8479ed03"
+  },
+  "Sources/DirectGatewayRefreshPolicy.swift": {
+    "before": null,
+    "after": "91bbd56baf20c39cb47a678253224178fb66845f9c99ced9bcb62c3283c8bbcf"
+  },
+  "Tests/p85_session_recovery.swift": {
+    "before": null,
+    "after": "3aaf1b48d68467c03a593477e84250dacf50140bc63feda9f7da48fce26ddc58"
+  },
+  "project.yml": {
+    "before": "1876da1c6db174e3ff169a98105947b446f10fa23b0bdabfb20c9aa2b14ee879",
+    "after": "ceb4e30327ba68b5ebb57a91c3ec483b02d2602c1f1697b139f35decec5cf64c"
+  }
+}
