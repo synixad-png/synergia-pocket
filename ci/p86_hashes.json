@@ -1,7 +1,11 @@
 {
+  "Sources/DirectMessagesSessionBootstrap.swift": {
+    "before": "c896b7d2ce22977d33ea480d953061332598084d595f9c98023a4926a7287676",
+    "after": "8d43716db3f3e394143b09a8944f8bcaa641e939ee13e60db8733f23486913ab"
+  },
   "Sources/Portal.swift": {
     "before": "c0d01c304e34aa6ef7e9bf3f7f077fe1aa809f98b04009c06400f52d7f575cef",
-    "after": "19f428a5effd482191b48dbcdcdaa9466a8e150974a097772f2a9ff769cf32f4"
+    "after": "c0e945945963976a0c9822c2024ebc963593ea8c9c182a5a938151b4383d4d98"
   },
   "Sources/MainView.swift": {
     "before": "847ae7579ccd220bb1f33f090e34c3b26e6f3f235cd681b8f8005fe3e11b3b45",
