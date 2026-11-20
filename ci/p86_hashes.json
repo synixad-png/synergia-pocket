@@ -5,11 +5,11 @@
   },
   "Sources/Portal.swift": {
     "before": "c0d01c304e34aa6ef7e9bf3f7f077fe1aa809f98b04009c06400f52d7f575cef",
-    "after": "c0e945945963976a0c9822c2024ebc963593ea8c9c182a5a938151b4383d4d98"
+    "after": "a789c7234daad095efa179ef7f5eba5c4f4a34e85b6f7af578d9f5c421cfdf4c"
   },
   "Sources/MainView.swift": {
     "before": "847ae7579ccd220bb1f33f090e34c3b26e6f3f235cd681b8f8005fe3e11b3b45",
-    "after": "61165f4ad70a4ab47bd5345c25c798665ced1513b7163a5cfc41fc557d72dcc0"
+    "after": "2d3cd13359c9d04a7e52f9735a1eb1e96d76f38c6c6012c0e91e91e8c53d8635"
   },
   "Sources/DirectSessionCookieVault.swift": {
     "before": "5d162b0ba170ee9a55b96536b3cd2748d53cf9cb3af170bac49d991ac482304b",
