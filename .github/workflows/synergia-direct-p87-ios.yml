@@ -787,6 +787,22 @@ jobs:
           test "$(find Sources -maxdepth 1 -name '*.swift' -type f | wc -l | tr -d ' ')" -eq 132
           bash Tests/run_p87_offline.sh
           test -f Config/SynergiaDirect-Info.plist
+      - name: Preserve P87 app version metadata when using explicit Info.plist
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('synergia-direct-ios/project.yml')
+          s=p.read_text()
+          match='    info:\n      path: Config/SynergiaDirect-Info.plist\n      properties:\n'
+          assert s.count(match)==1
+          s=s.replace(match, match+"        CFBundleShortVersionString: '0.31'\n        CFBundleVersion: '87'\n",1)
+          match2='        PRODUCT_BUNDLE_IDENTIFIER: pl.synixad.synergiadirect\n'
+          assert s.count(match2)==1
+          s=s.replace(match2,match2+"        MARKETING_VERSION: '0.31'\n        CURRENT_PROJECT_VERSION: '87'\n",1)
+          p.write_text(s)
+          PY
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Build iOS device app without signing
@@ -811,6 +827,8 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' Payload/SynergiaDirect.app/Info.plist | grep -x AppIcon
           /usr/libexec/PlistBuddy -c 'Print :BGTaskSchedulerPermittedIdentifiers:0' Payload/SynergiaDirect.app/Info.plist | grep -x pl.synixad.synergiadirect.school-refresh
           /usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes:0' Payload/SynergiaDirect.app/Info.plist | grep -x fetch
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Payload/SynergiaDirect.app/Info.plist | grep -x '0.31'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Payload/SynergiaDirect.app/Info.plist | grep -x '87'
           zip -qry SYNERGIA_DIRECT_v0_31_P87_BUILD_SOURCES.zip Sources Tests project.yml Config README_P87_POWIADOMIENIA_W_TLE.md RAPORT_P87.txt
       - name: Upload IPA
         uses: actions/upload-artifact@v4
