@@ -775,6 +775,14 @@ jobs:
           print('P87 overlay SHA256',hashlib.sha256(raw).hexdigest())
           PY
           patch --batch --fuzz=0 -p1 -d synergia-direct-ios < /tmp/p87_background_source.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('synergia-direct-ios/Sources/DirectNotificationOwnerKeychain.swift')
+          source=p.read_text()
+          marker='    static func prepareForBackgroundReads() -> Bool {'
+          assert source.count(marker)==1
+          p.write_text(source.replace(marker,'    @MainActor\n'+marker,1))
+          PY
           cd synergia-direct-ios
           test "$(find Sources -maxdepth 1 -name '*.swift' -type f | wc -l | tr -d ' ')" -eq 132
           bash Tests/run_p87_offline.sh
@@ -822,7 +830,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: SYNERGIA_DIRECT_P86_XCODE_LOG
+          name: SYNERGIA_DIRECT_P87_XCODE_LOG
           path: synergia-direct-ios/xcodebuild.log
           retention-days: 14
           if-no-files-found: ignore
