@@ -1,0 +1,30 @@
+{
+  "Sources/Portal.swift": {
+    "before": "c0d01c304e34aa6ef7e9bf3f7f077fe1aa809f98b04009c06400f52d7f575cef",
+    "after": "19f428a5effd482191b48dbcdcdaa9466a8e150974a097772f2a9ff769cf32f4"
+  },
+  "Sources/MainView.swift": {
+    "before": "847ae7579ccd220bb1f33f090e34c3b26e6f3f235cd681b8f8005fe3e11b3b45",
+    "after": "61165f4ad70a4ab47bd5345c25c798665ced1513b7163a5cfc41fc557d72dcc0"
+  },
+  "Sources/DirectSessionCookieVault.swift": {
+    "before": "5d162b0ba170ee9a55b96536b3cd2748d53cf9cb3af170bac49d991ac482304b",
+    "after": "4d235dabe5250e79ff7ca4ab5b24b19fbf7962335898ede1b3f26e85022be763"
+  },
+  "Sources/DirectSavedAccounts.swift": {
+    "before": null,
+    "after": "d39696866cf8224f745bbe7a3b0105cee9dad08876d32956c155ba7f9701e517"
+  },
+  "Sources/DirectSavedAccountsView.swift": {
+    "before": null,
+    "after": "698391f37db2b60c4d7b8478ccb2f2f60ba92029dfe04b8702f3b4501e38c897"
+  },
+  "Tests/p86_saved_accounts.swift": {
+    "before": null,
+    "after": "608ea9c7915a2bcf4475ca3625bbaa072d0fe04df09b87fe77a7beb9528bc348"
+  },
+  "project.yml": {
+    "before": "ceb4e30327ba68b5ebb57a91c3ec483b02d2602c1f1697b139f35decec5cf64c",
+    "after": "84b2a4905683c3a8e29633995d383f0b62131676d34972918e4f7501e6a5834d"
+  }
+}
